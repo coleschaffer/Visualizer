@@ -301,14 +301,9 @@ function handleExtensionMessage(message: { type: string; payload?: VisualChange 
       changeId: message.payload.id,
     }));
 
-    // Auto-apply changes using headless Claude
-    setTimeout(() => {
-      autoApplyChanges(
-        message.payload!.id,
-        message.payload!.feedback,
-        message.payload!.element.selector
-      );
-    }, 300);
+    // NOTE: Auto-apply disabled due to stability issues with spawning Claude
+    // Users should ask Claude directly: "Apply my visual feedback"
+    console.error('\n💡 To apply this change, ask Claude: "Apply my visual feedback"\n');
   }
 }
 
