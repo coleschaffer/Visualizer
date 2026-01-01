@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { ElementInfo, VisualChange } from '../../shared/types';
 import { useStore, generateChangeId } from '../../shared/store';
-import { BoxModelDiagram } from '../controls/BoxModelDiagram';
-import { ColorPicker } from '../controls/ColorPicker';
 import { captureElementScreenshot } from '../selection/ScreenshotCapture';
 
 interface FloatingPanelProps {
@@ -23,8 +21,6 @@ export function FloatingPanel({
   const [status, setStatus] = useState<'idle' | 'working' | 'done'>('idle');
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [visualChanges, setVisualChanges] = useState<Partial<ElementInfo['computedStyles']>>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
 
@@ -74,21 +70,9 @@ export function FloatingPanel({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Handle visual change from box model or color picker
-  const handleVisualChange = (property: string, value: string) => {
-    setVisualChanges(prev => ({ ...prev, [property]: value }));
-
-    // Apply live preview
-    const el = document.querySelector(element.selector) as HTMLElement;
-    if (el) {
-      const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
-      el.style.setProperty(cssProperty, value);
-    }
-  };
-
   // Handle confirm
   const handleConfirm = async () => {
-    if (!feedback.trim() && Object.keys(visualChanges).length === 0) return;
+    if (!feedback.trim()) return;
 
     setStatus('working');
 
@@ -105,7 +89,7 @@ export function FloatingPanel({
         screenshot,
       },
       feedback: feedback.trim(),
-      visualAdjustments: visualChanges,
+      visualAdjustments: {},
       cssFramework: 'unknown', // Will be detected
       originalUnits: {},
       timestamp: new Date().toISOString(),
@@ -126,22 +110,8 @@ export function FloatingPanel({
       setTimeout(() => {
         setStatus('idle');
         setFeedback('');
-        setVisualChanges({});
       }, 1500);
     }, 1000);
-  };
-
-  // Handle undo
-  const handleUndo = () => {
-    // Revert visual changes
-    const el = document.querySelector(element.selector) as HTMLElement;
-    if (el) {
-      Object.keys(visualChanges).forEach(property => {
-        const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
-        el.style.removeProperty(cssProperty);
-      });
-    }
-    setVisualChanges({});
   };
 
   const panelStyle: React.CSSProperties = {
@@ -163,65 +133,13 @@ export function FloatingPanel({
           <span className="vf-element-info-tag">{element.tag}</span>
           {element.id && <span style={{ color: '#a855f7' }}>#{element.id}</span>}
         </div>
-        <button className="vf-panel-close" onClick={onClose}>
+        <button className="vf-panel-close" onClick={onClose} style={{ color: '#6b7280', fontSize: '16px' }}>
           ✕
         </button>
       </div>
 
-      {/* Content - side by side */}
+      {/* Content */}
       <div className="vf-panel-content">
-        {/* Visual controls (left) */}
-        <div className="vf-panel-visual">
-          <BoxModelDiagram
-            styles={element.computedStyles}
-            onChange={handleVisualChange}
-          />
-
-          <button
-            onClick={() => setShowColorPicker(!showColorPicker)}
-            style={{
-              marginTop: '12px',
-              width: '100%',
-              padding: '8px',
-              background: element.computedStyles.backgroundColor,
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '11px',
-              color: '#6b7280',
-            }}
-          >
-            Background Color
-          </button>
-
-          {showColorPicker && (
-            <ColorPicker
-              color={element.computedStyles.backgroundColor}
-              onChange={(color) => handleVisualChange('backgroundColor', color)}
-            />
-          )}
-
-          {Object.keys(visualChanges).length > 0 && (
-            <button
-              onClick={handleUndo}
-              style={{
-                marginTop: '8px',
-                width: '100%',
-                padding: '6px',
-                background: 'transparent',
-                border: '1px solid #ef4444',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '11px',
-                color: '#ef4444',
-              }}
-            >
-              Undo Changes
-            </button>
-          )}
-        </div>
-
-        {/* Chat (right) */}
         <div className="vf-panel-chat">
           <div className="vf-element-info">
             {element.smartSummary || `${element.tag} element, ${Math.round(element.rect.width)}×${Math.round(element.rect.height)}px`}
@@ -242,11 +160,12 @@ export function FloatingPanel({
           <button
             className={`vf-confirm-btn ${status === 'working' ? 'vf-confirm-btn--working' : ''}`}
             onClick={handleConfirm}
-            disabled={status === 'working' || (!feedback.trim() && Object.keys(visualChanges).length === 0)}
+            disabled={status === 'working' || !feedback.trim()}
+            style={{ background: status === 'done' ? '#22c55e' : '#22c55e' }}
           >
-            {status === 'idle' && 'Confirm & Send to Claude'}
-            {status === 'working' && 'Working...'}
-            {status === 'done' && '✓ Done'}
+            {status === 'idle' && 'Confirm'}
+            {status === 'working' && 'Sending...'}
+            {status === 'done' && '✓ Sent'}
           </button>
 
           {status !== 'idle' && (
