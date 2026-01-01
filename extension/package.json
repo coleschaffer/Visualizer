@@ -1,0 +1,35 @@
+{
+  "name": "visual-feedback-tool-extension",
+  "version": "0.1.0",
+  "description": "Visual feedback tool for Claude Code - click elements, adjust visually, send to AI",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && npm run build:clean && npm run build:content && npm run build:background && npm run build:popup && npm run build:assets",
+    "build:clean": "rm -rf dist && mkdir -p dist/src/content dist/src/background dist/icons",
+    "build:content": "ENTRY=content vite build",
+    "build:background": "ENTRY=background vite build",
+    "build:popup": "ENTRY=popup vite build",
+    "build:assets": "cp manifest.json dist/ && cp src/content/styles.css dist/src/content/",
+    "preview": "vite preview",
+    "watch": "vite build --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  }
+}
