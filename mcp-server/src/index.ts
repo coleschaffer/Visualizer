@@ -82,7 +82,54 @@ process.on('exit', unregisterServer);
 process.on('SIGINT', () => { unregisterServer(); process.exit(); });
 process.on('SIGTERM', () => { unregisterServer(); process.exit(); });
 
-// Auto-apply changes using a headless Claude process
+// Auto-submit feedback to the running Claude Code terminal using AppleScript
+function autoSubmitToTerminal(feedback: string, selector: string) {
+  const message = `Apply visual feedback: "${feedback}" to element matching "${selector.split('>').pop()?.trim()}"`;
+
+  console.error('📤 Submitting to Claude Code terminal...');
+  console.error(`   Message: ${message}`);
+
+  // Use AppleScript to type into Terminal and press Enter
+  const script = `
+    tell application "Terminal"
+      activate
+      delay 0.3
+      tell application "System Events"
+        keystroke "${message.replace(/"/g, '\\"').replace(/\n/g, ' ')}"
+        delay 0.1
+        keystroke return
+      end tell
+    end tell
+  `;
+
+  const { exec } = require('child_process');
+  exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (error: Error | null, stdout: string, stderr: string) => {
+    if (error) {
+      console.error('❌ Failed to submit to terminal:', error.message);
+      // Try iTerm2 as fallback
+      const itermScript = `
+        tell application "iTerm"
+          activate
+          delay 0.3
+          tell current session of current window
+            write text "${message.replace(/"/g, '\\"')}"
+          end tell
+        end tell
+      `;
+      exec(`osascript -e '${itermScript.replace(/'/g, "'\"'\"'")}'`, (err2: Error | null) => {
+        if (err2) {
+          console.error('❌ iTerm2 fallback also failed:', err2.message);
+        } else {
+          console.error('✅ Submitted via iTerm2');
+        }
+      });
+    } else {
+      console.error('✅ Submitted to Terminal');
+    }
+  });
+}
+
+// Auto-apply changes using a headless Claude process (deprecated)
 function autoApplyChanges(changeId: string, feedback: string, selector: string) {
   // Single line prompt to avoid shell escaping issues
   const prompt = `VISUAL FEEDBACK: "${feedback}" on element ${selector}. Use get_visual_feedback tool, find the source file, make the edit, then call mark_change_applied with changeId "${changeId}". Do not ask for confirmation.`;
@@ -301,9 +348,10 @@ function handleExtensionMessage(message: { type: string; payload?: VisualChange 
       changeId: message.payload.id,
     }));
 
-    // NOTE: Auto-apply disabled due to stability issues with spawning Claude
-    // Users should ask Claude directly: "Apply my visual feedback"
-    console.error('\n💡 To apply this change, ask Claude: "Apply my visual feedback"\n');
+    // Auto-submit to the running Claude Code terminal
+    setTimeout(() => {
+      autoSubmitToTerminal(message.payload!.feedback, message.payload!.element.selector);
+    }, 500);
   }
 }
 
