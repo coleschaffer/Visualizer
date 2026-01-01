@@ -84,7 +84,7 @@ process.on('SIGTERM', () => { unregisterServer(); process.exit(); });
 
 // Auto-apply changes using a headless Claude process
 function autoApplyChanges(changeId: string, feedback: string, selector: string) {
-  const prompt = `Use the get_visual_feedback MCP tool to get pending changes, then apply them to the code.`;
+  const prompt = `You are applying visual feedback from a browser extension. Use the get_visual_feedback MCP tool to get the pending change, then IMMEDIATELY find the relevant source file and implement the requested change. Do not ask for confirmation - just make the edit. After editing, use mark_change_applied to mark it complete.`;
   const claudePath = process.env.HOME + '/.local/bin/claude';
   const workDir = process.cwd();
 
