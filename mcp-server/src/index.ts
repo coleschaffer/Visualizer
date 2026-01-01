@@ -84,17 +84,8 @@ process.on('SIGTERM', () => { unregisterServer(); process.exit(); });
 
 // Auto-apply changes using a headless Claude process
 function autoApplyChanges(changeId: string, feedback: string, selector: string) {
-  const prompt = `VISUAL FEEDBACK REQUEST: "${feedback}"
-
-Element: ${selector}
-
-Instructions:
-1. First, use get_visual_feedback MCP tool to get full change details
-2. Search the codebase to find the source file containing this element
-3. Edit the file to implement the requested change
-4. Use mark_change_applied with changeId "${changeId}" when done
-
-DO NOT ask for confirmation. Just find the file and make the edit immediately.`;
+  // Single line prompt to avoid shell escaping issues
+  const prompt = `VISUAL FEEDBACK: "${feedback}" on element ${selector}. Use get_visual_feedback tool, find the source file, make the edit, then call mark_change_applied with changeId "${changeId}". Do not ask for confirmation.`;
   const claudePath = process.env.HOME + '/.local/bin/claude';
   const workDir = process.cwd();
 
@@ -103,46 +94,46 @@ DO NOT ask for confirmation. Just find the file and make the edit immediately.`;
   console.error(`   Feedback: "${feedback}"`);
   console.error(`   Selector: ${selector}`);
 
-  // Spawn Claude in print mode (non-interactive) to apply the changes
-  const child = exec(
-    `"${claudePath}" -p "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions`,
-    {
-      cwd: workDir,
-      timeout: 120000, // 2 minute timeout
-      env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin' },
-    },
-    (error, stdout, stderr) => {
-      if (error) {
-        console.error('❌ Auto-apply failed:', error.message);
-        if (stderr) console.error('   stderr:', stderr);
-        // Notify extension of failure
-        if (connectedClient?.readyState === WebSocket.OPEN) {
-          connectedClient.send(JSON.stringify({
-            type: 'AUTO_APPLY_FAILED',
-            changeId,
-            error: error.message,
-          }));
-        }
-      } else {
-        console.error('✅ Changes applied successfully');
-        if (stdout) console.error('   Output:', stdout.substring(0, 200));
-        // Notify extension of success
-        if (connectedClient?.readyState === WebSocket.OPEN) {
-          connectedClient.send(JSON.stringify({
-            type: 'AUTO_APPLY_SUCCESS',
-            changeId,
-          }));
-        }
-      }
-    }
-  );
+  // Use spawn with args array to properly handle the prompt
+  const { spawn } = require('child_process');
+  const child = spawn(claudePath, ['-p', prompt, '--dangerously-skip-permissions'], {
+    cwd: workDir,
+    env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
-  child.stdout?.on('data', (data) => {
+  child.stdout?.on('data', (data: Buffer) => {
     console.error('[Claude]', data.toString().trim());
   });
 
-  child.stderr?.on('data', (data) => {
-    console.error('[Claude]', data.toString().trim());
+  child.stderr?.on('data', (data: Buffer) => {
+    console.error('[Claude stderr]', data.toString().trim());
+  });
+
+  child.on('close', (code: number) => {
+    if (code === 0) {
+      console.error('✅ Claude process completed successfully');
+    } else {
+      console.error(`❌ Claude process exited with code ${code}`);
+      if (connectedClient?.readyState === WebSocket.OPEN) {
+        connectedClient.send(JSON.stringify({
+          type: 'AUTO_APPLY_FAILED',
+          changeId,
+          error: `Process exited with code ${code}`,
+        }));
+      }
+    }
+  });
+
+  child.on('error', (error: Error) => {
+    console.error('❌ Failed to spawn Claude:', error.message);
+    if (connectedClient?.readyState === WebSocket.OPEN) {
+      connectedClient.send(JSON.stringify({
+        type: 'AUTO_APPLY_FAILED',
+        changeId,
+        error: error.message,
+      }));
+    }
   });
 }
 
