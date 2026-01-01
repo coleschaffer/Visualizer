@@ -39,7 +39,24 @@ A Chrome Extension + MCP Server that lets you visually edit web elements and sen
 
 ## Quick Start
 
-### 1. Install MCP Server
+### One-Line Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/coleschaffer/visual-feedback-tool/main/install.sh | bash
+```
+
+This will:
+- Clone the repo to `~/.visual-feedback-tool`
+- Build the MCP server and Chrome extension
+- Add the MCP server to your `~/.claude.json`
+
+Then just load the extension in Chrome and restart Claude Code!
+
+---
+
+### Manual Installation
+
+#### 1. Install MCP Server
 
 ```bash
 cd mcp-server
@@ -47,7 +64,7 @@ npm install
 npm run build
 ```
 
-### 2. Add to Claude Code config
+#### 2. Add to Claude Code config
 
 Add to your `~/.claude.json`:
 
@@ -62,7 +79,7 @@ Add to your `~/.claude.json`:
 }
 ```
 
-### 3. Build Extension
+#### 3. Build Extension
 
 ```bash
 cd extension
@@ -70,7 +87,7 @@ npm install
 npm run build
 ```
 
-### 4. Generate Icons
+#### 4. Generate Icons
 
 ```bash
 cd dist/icons
@@ -84,14 +101,14 @@ magick -size 48x48 xc:'#22c55e' icon-active48.png
 magick -size 128x128 xc:'#22c55e' icon-active128.png
 ```
 
-### 5. Load Extension in Chrome
+#### 5. Load Extension in Chrome
 
 1. Open `chrome://extensions`
 2. Enable "Developer mode"
 3. Click "Load unpacked"
 4. Select the `extension/dist` folder
 
-### 6. Connect
+#### 6. Connect
 
 1. Start Claude Code (MCP server starts automatically)
 2. Copy the token displayed in the terminal
