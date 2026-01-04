@@ -252,7 +252,7 @@ export function FloatingPanel({
     try {
       await navigator.clipboard.writeText(name);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), 600);
     } catch {
       // Fallback for older browsers
       const textarea = document.createElement('textarea');
@@ -262,7 +262,7 @@ export function FloatingPanel({
       document.execCommand('copy');
       document.body.removeChild(textarea);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), 600);
     }
   };
 
@@ -276,20 +276,51 @@ export function FloatingPanel({
       {/* Header */}
       <div className="vf-panel-header">
         <div
-          className="vf-panel-title"
+          className="vf-panel-title-row"
           onClick={handleCopy}
           title="Click to copy"
           style={{
-            fontSize: '12px',
-            color: copied ? '#22c55e' : '#374151',
-            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
             cursor: 'pointer',
-            transition: 'color 0.2s ease',
             flex: 1,
             minWidth: 0,
           }}
         >
-          {getElementName()}
+          <span
+            style={{
+              fontSize: '12px',
+              color: copied ? '#22c55e' : '#374151',
+              fontWeight: 500,
+              transition: 'color 0.1s ease',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {getElementName()}
+          </span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={copied ? '#22c55e' : '#9ca3af'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ flexShrink: 0, transition: 'stroke 0.1s ease' }}
+          >
+            {copied ? (
+              <polyline points="20 6 9 17 4 12" />
+            ) : (
+              <>
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </>
+            )}
+          </svg>
         </div>
         <button
           className="vf-panel-close"
