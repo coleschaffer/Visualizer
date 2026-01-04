@@ -63,8 +63,8 @@ cd server && node server.js > server.log 2>&1 &
 - **Spacebar Selection** - Hover + Space to select hard-to-click elements
 
 ### Model Selection
-- **Opus 4** - Most capable, best for complex changes
-- **Sonnet 4** - Faster and cheaper, great for simple tweaks
+- **Opus 4.5** - Most capable, best for complex changes
+- **Sonnet 4.5** - Faster and cheaper, great for simple tweaks
 - Switch anytime from the extension popup
 
 ### Element Memory (Beads System)
@@ -76,6 +76,20 @@ cd server && node server.js > server.log 2>&1 &
   - [1/3/2026] ✓ "Add hover effect"
   ```
 - Provides continuity for iterative design work
+
+### @ Element Reference
+- Type `@` in the feedback box to reference another element
+- Panel becomes transparent so you can select the reference element
+- Click any element to insert its reference (e.g., `[.header-button]`)
+- Great for "make this the same color as [.navbar-link]" type feedback
+- Press `Esc` to cancel reference mode
+
+### Visual Feedback
+- **Working Overlay** - Element shows spinner while Claude is processing
+- **Success Overlay** - Green checkmark when Claude finishes
+- **Fade Animation** - Overlay fades away smoothly after success
+- **Copy Element Name** - Click element name in panel header to copy selector
+- **Refresh Reminder** - "You may need to refresh the page" hint after changes
 
 ### Task History
 - View all submitted tasks in the History tab
@@ -130,7 +144,8 @@ cd server && node server.js > server.log 2>&1 &
 | `↓` Arrow Down | Navigate to child element |
 | `←` Arrow Left | Navigate to previous sibling |
 | `→` Arrow Right | Navigate to next sibling |
-| `Esc` | Deselect / Close panel |
+| `@` | Enter element reference mode (in feedback box) |
+| `Esc` | Deselect / Close panel / Cancel reference |
 | `Enter` | Submit feedback |
 | `Option+Enter` | New line in feedback |
 
@@ -142,8 +157,8 @@ cd server && node server.js > server.log 2>&1 &
 Set this to the root of your codebase. Claude Code will run in this directory and search for source files here.
 
 ### Model Selection
-- **Opus 4** (`claude-opus-4-20250514`) - Best quality, uses more API credits
-- **Sonnet 4** (`claude-sonnet-4-20250514`) - Faster, cheaper, good for simple changes
+- **Opus 4.5** (`claude-opus-4-5-20251101`) - Best quality, uses more API credits
+- **Sonnet 4.5** (`claude-sonnet-4-5-20241022`) - Faster, cheaper, good for simple changes
 
 ### Server Ports
 - WebSocket: `3847` (extension ↔ server communication)
