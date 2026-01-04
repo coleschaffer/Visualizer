@@ -276,18 +276,20 @@ export function FloatingPanel({
       });
 
       if (response.success) {
-        // Play subtle sound on success
-        playConfirmSound();
-        setStatus('done');
-        // Start fading the overlay after a moment
+        // Show working state for minimum 1.5s before transitioning to done
         setTimeout(() => {
-          setOverlayFading(true);
-        }, 2000);
-        // Close panel after overlay fades
-        setTimeout(() => {
-          setOverlayVisible(false);
-          onClose();
-        }, 4000);
+          playConfirmSound();
+          setStatus('done');
+          // Start fading the overlay after showing success
+          setTimeout(() => {
+            setOverlayFading(true);
+          }, 1500);
+          // Close panel after overlay fades
+          setTimeout(() => {
+            setOverlayVisible(false);
+            onClose();
+          }, 3000);
+        }, 1500);
       } else {
         console.error('Failed to send feedback:', response.error);
         setStatus('error');
@@ -374,78 +376,43 @@ export function FloatingPanel({
             width: element.rect.width,
             height: element.rect.height,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             background: status === 'done'
-              ? 'rgba(34, 197, 94, 0.9)'
-              : 'rgba(59, 130, 246, 0.9)',
+              ? 'rgba(34, 197, 94, 0.85)'
+              : 'rgba(59, 130, 246, 0.85)',
             borderRadius: '4px',
             zIndex: 2147483645,
             pointerEvents: 'none',
-            transition: 'opacity 1.5s ease-out',
+            transition: 'opacity 1s ease-out',
             opacity: overlayFading ? 0 : 1,
           }}
         >
+          {/* Spinner for working state */}
           {status === 'working' && (
-            <>
-              <div className="vf-overlay-spinner" style={{
-                width: '32px',
-                height: '32px',
-                border: '3px solid rgba(255,255,255,0.3)',
-                borderTopColor: 'white',
-                borderRadius: '50%',
-                animation: 'vf-spin 1s linear infinite',
-                marginBottom: '12px',
-              }} />
-              <div style={{
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 600,
-                textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-              }}>
-                Claude is working...
-              </div>
-              <div style={{
-                color: 'rgba(255,255,255,0.8)',
-                fontSize: '11px',
-                marginTop: '4px',
-              }}>
-                Finding file & making changes
-              </div>
-            </>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              border: '3px solid rgba(255,255,255,0.3)',
+              borderTopColor: 'white',
+              borderRadius: '50%',
+              animation: 'vf-spin 1s linear infinite',
+            }} />
           )}
+          {/* Checkmark for done state */}
           {status === 'done' && (
-            <>
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ marginBottom: '12px' }}
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              <div style={{
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 600,
-                textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-              }}>
-                Success! Claude finished
-              </div>
-              <div style={{
-                color: 'rgba(255,255,255,0.9)',
-                fontSize: '11px',
-                marginTop: '4px',
-              }}>
-                You may need to refresh the page
-              </div>
-            </>
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
           )}
         </div>
       )}
