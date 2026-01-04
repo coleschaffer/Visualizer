@@ -100,8 +100,8 @@ export const useStore = create<AppState & StoreActions>()(
     {
       name: 'visual-feedback-storage',
       storage: createJSONStorage(() => localStorage),
+      // Only persist token, not changes (they contain large screenshots)
       partialize: (state) => ({
-        pendingChanges: state.pendingChanges,
         mcpToken: state.mcpToken,
       }),
     }

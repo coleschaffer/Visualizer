@@ -11,7 +11,7 @@
     "build:content": "ENTRY=content vite build",
     "build:background": "ENTRY=background vite build",
     "build:popup": "ENTRY=popup vite build",
-    "build:assets": "cp manifest.json dist/ && cp src/content/styles.css dist/src/content/",
+    "build:assets": "cp manifest.json dist/ && cp src/content/styles.css dist/src/content/ && cp -r icons dist/",
     "preview": "vite preview",
     "watch": "vite build --watch"
   },

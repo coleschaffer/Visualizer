@@ -1,163 +1,259 @@
 # Visual Feedback Tool
 
-A Chrome Extension + MCP Server that lets you visually edit web elements and send feedback directly to Claude Code.
+**Click any element on any website, describe what you want changed, and Claude Code makes it happen.**
+
+A Chrome Extension that lets you visually select elements and send feedback directly to Claude Code, which automatically finds the source file, makes the change, commits, and pushes to GitHub.
+
+---
+
+## Quick Start (5 minutes)
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/coleschaffer/visual-feedback-tool.git
+cd visual-feedback-tool
+
+# Install server dependencies
+cd server && npm install && cd ..
+
+# Install extension dependencies
+cd extension && npm install && npm run build && cd ..
+```
+
+### 2. Start the Server
+
+```bash
+cd server && node server.js
+```
+
+Or run in background:
+```bash
+cd server && node server.js > server.log 2>&1 &
+```
+
+### 3. Load the Chrome Extension
+
+1. Open `chrome://extensions` in Chrome
+2. Enable **Developer mode** (toggle in top right)
+3. Click **Load unpacked**
+4. Select the `extension/dist` folder
+
+### 4. Use It
+
+1. Click the extension icon in Chrome toolbar
+2. Click **Connect** to connect to the server
+3. Set your **Project folder** path (the codebase you're working on)
+4. Toggle **Enable on current page**
+5. Click any element, type what you want changed, hit Enter
+6. Claude Code finds the file, makes the change, commits & pushes!
+
+---
 
 ## Features
 
-- **Click to Select**: Click any element on any website to select it
-- **Visual Controls**: Box model diagram, resize handles, color picker
-- **Measure Distances**: Always-visible distance measurements between elements
-- **Breadcrumb Navigation**: Fixed bar at top showing element path
-- **Live Preview**: See changes applied in real-time before confirming
-- **Claude Code Integration**: Changes sent directly to Claude Code via MCP
+### Core Workflow
+- **Click to Select** - Click any element on any website to select it
+- **Natural Language Feedback** - Just describe what you want: "make this button blue", "increase padding", "change font to bold"
+- **Automatic Execution** - Claude Code finds the source file, makes the change, commits, and pushes
+
+### Smart Element Selection
+- **Deep Element Detection** - Select nested elements, SVGs, even disabled buttons
+- **Keyboard Navigation** - Arrow keys to navigate parent/child elements
+- **Spacebar Selection** - Hover + Space to select hard-to-click elements
+
+### Model Selection
+- **Opus 4** - Most capable, best for complex changes
+- **Sonnet 4** - Faster and cheaper, great for simple tweaks
+- Switch anytime from the extension popup
+
+### Element Memory (Beads System)
+- Tracks changes per element across sessions
+- When you modify an element again, Claude sees the history:
+  ```
+  Previous Changes to This Element:
+  - [1/3/2026] ✓ "Make the button blue"
+  - [1/3/2026] ✓ "Add hover effect"
+  ```
+- Provides continuity for iterative design work
+
+### Task History
+- View all submitted tasks in the History tab
+- See status: processing, complete, or failed
+- View Claude's full output log
+- **GitHub commit links** - Click to view the exact commit
+
+### LSP Integration
+- Claude uses Language Server Protocol features to navigate your codebase
+- Go to Definition, Find References, Symbol Search
+- Works with TypeScript, JavaScript, Python, and more
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────┐
-│     Chrome Extension        │
-│  - DOM overlay & controls   │
-│  - Element selection        │
-│  - Visual adjustments       │
-└─────────────┬───────────────┘
-              │ WebSocket
-              ▼
-┌─────────────────────────────┐
-│      MCP Server             │
-│  - Token authentication     │
-│  - Change queue             │
-│  - MCP tools                │
-└─────────────┬───────────────┘
-              │ stdio
-              ▼
-┌─────────────────────────────┐
-│      Claude Code            │
-│  - Receives visual feedback │
-│  - Applies changes to code  │
-└─────────────────────────────┘
+┌─────────────────────────────────┐
+│      Chrome Extension           │
+│  • Element selection overlay    │
+│  • Floating feedback panel      │
+│  • Task history viewer          │
+└──────────────┬──────────────────┘
+               │ WebSocket (port 3847)
+               ▼
+┌─────────────────────────────────┐
+│      Local Server               │
+│  • Receives feedback            │
+│  • Spawns Claude Code           │
+│  • Tracks tasks & beads         │
+└──────────────┬──────────────────┘
+               │ CLI
+               ▼
+┌─────────────────────────────────┐
+│      Claude Code                │
+│  • Finds source files           │
+│  • Makes code changes           │
+│  • Commits & pushes to GitHub   │
+└─────────────────────────────────┘
 ```
-
-## Quick Start
-
-### One-Line Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/coleschaffer/visual-feedback-tool/main/install.sh | bash
-```
-
-This will:
-- Clone the repo to `~/.visual-feedback-tool`
-- Build the MCP server and Chrome extension
-- Add the MCP server to your `~/.claude.json`
-
-Then just load the extension in Chrome and restart Claude Code!
 
 ---
-
-### Manual Installation
-
-#### 1. Install MCP Server
-
-```bash
-cd mcp-server
-npm install
-npm run build
-```
-
-#### 2. Add to Claude Code config
-
-Add to your `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "visual-feedback": {
-      "command": "node",
-      "args": ["/path/to/visual-feedback-tool/mcp-server/dist/index.js"]
-    }
-  }
-}
-```
-
-#### 3. Build Extension
-
-```bash
-cd extension
-npm install
-npm run build
-```
-
-#### 4. Generate Icons
-
-```bash
-cd dist/icons
-magick -size 16x16 xc:'#3b82f6' icon16.png
-magick -size 32x32 xc:'#3b82f6' icon32.png
-magick -size 48x48 xc:'#3b82f6' icon48.png
-magick -size 128x128 xc:'#3b82f6' icon128.png
-magick -size 16x16 xc:'#22c55e' icon-active16.png
-magick -size 32x32 xc:'#22c55e' icon-active32.png
-magick -size 48x48 xc:'#22c55e' icon-active48.png
-magick -size 128x128 xc:'#22c55e' icon-active128.png
-```
-
-#### 5. Load Extension in Chrome
-
-1. Open `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension/dist` folder
-
-#### 6. Connect
-
-1. Start Claude Code (MCP server starts automatically)
-2. Copy the token displayed in the terminal
-3. Click the extension icon and enter the token
-
-## Usage
-
-1. **Enable**: Click the extension icon or use the popup toggle
-2. **Hover**: Move over elements to see highlights and measurements
-3. **Select**: Click an element to select it
-4. **Adjust**: Use visual controls or type feedback
-5. **Confirm**: Click "Confirm & Send to Claude"
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Esc` | Deselect element / Disable extension |
-| `Cmd+Z` | Undo visual changes |
-| `Cmd+Enter` | Confirm and send to Claude |
+| `Click` | Select element under cursor |
+| `Space` | Select currently hovered element |
+| `↑` Arrow Up | Navigate to parent element |
+| `↓` Arrow Down | Navigate to child element |
+| `Esc` | Deselect / Close panel |
+| `Enter` | Submit feedback |
+| `Option+Enter` | New line in feedback |
 
-## MCP Tools
+---
 
-The MCP server provides these tools to Claude Code:
+## Configuration
 
-- `get_visual_feedback` - Get pending visual changes
-- `mark_change_applied` - Mark a change as applied
-- `mark_change_failed` - Mark a change as failed (triggers retry)
-- `get_change_details` - Get details for a specific change
+### Project Folder
+Set this to the root of your codebase. Claude Code will run in this directory and search for source files here.
+
+### Model Selection
+- **Opus 4** (`claude-opus-4-20250514`) - Best quality, uses more API credits
+- **Sonnet 4** (`claude-sonnet-4-20250514`) - Faster, cheaper, good for simple changes
+
+### Server Ports
+- WebSocket: `3847` (extension ↔ server communication)
+- HTTP: `3848` (status & task history API)
+
+---
+
+## File Structure
+
+```
+visual-feedback-tool/
+├── extension/           # Chrome extension
+│   ├── src/
+│   │   ├── background/  # Service worker
+│   │   ├── content/     # DOM overlay & selection
+│   │   ├── popup/       # Extension popup UI
+│   │   └── shared/      # Shared types & state
+│   └── dist/            # Built extension (load this in Chrome)
+├── server/              # Local WebSocket server
+│   └── server.js        # Main server file
+└── mcp-server/          # MCP integration (optional)
+```
+
+---
+
+## Run Server on Startup (macOS)
+
+Create a Launch Agent to run the server automatically:
+
+```bash
+# Create the plist
+cat > ~/Library/LaunchAgents/com.visualfeedback.server.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.visualfeedback.server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/node</string>
+        <string>/path/to/visual-feedback-tool/server/server.js</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/vf-server.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/vf-server.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+# Update the path in the plist
+sed -i '' "s|/path/to/visual-feedback-tool|$(pwd)|g" ~/Library/LaunchAgents/com.visualfeedback.server.plist
+
+# Load it
+launchctl load ~/Library/LaunchAgents/com.visualfeedback.server.plist
+```
+
+---
 
 ## Development
 
-### Extension
-
+### Extension Development
 ```bash
 cd extension
 npm install
-npm run dev   # Watch mode
-npm run build # Production build
+npm run dev    # Watch mode - rebuilds on changes
+npm run build  # Production build
 ```
 
-### MCP Server
-
+### Server Development
 ```bash
-cd mcp-server
+cd server
 npm install
-npm run dev   # Watch mode with tsx
-npm run build # Compile TypeScript
+node server.js
 ```
+
+---
+
+## Troubleshooting
+
+### Extension won't connect
+- Make sure the server is running: `curl http://localhost:3848/status`
+- Check the server log: `cat /tmp/vf-server.log`
+
+### Can't select certain elements
+- Try hovering and pressing `Space` instead of clicking
+- Use `↑`/`↓` arrows to navigate to parent/child elements
+- Some elements may be in iframes (not yet supported)
+
+### Changes not appearing in GitHub
+- Make sure your project folder has a git remote configured
+- Check Claude's output in the History tab for errors
+
+---
+
+## Requirements
+
+- **Node.js** 18+
+- **Chrome** browser
+- **Claude Code** CLI installed (`~/.local/bin/claude`)
+- **Git** configured with GitHub access
+
+---
 
 ## License
 

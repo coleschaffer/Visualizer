@@ -19,6 +19,8 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+server/server.log
+server/tasks.json
 
 # Environment
 .env
@@ -26,3 +28,6 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Beads element tracking (generated per-project)
+.beads/

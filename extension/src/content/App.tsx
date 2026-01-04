@@ -1,15 +1,9 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useStore } from '../shared/store';
 import { ElementHighlight } from './overlay/ElementHighlight';
-import { BreadcrumbBar } from './overlay/BreadcrumbBar';
 import { FloatingPanel } from './overlay/FloatingPanel';
 import { getElementInfo } from './selection/ElementTracker';
 import type { ElementInfo } from '../shared/types';
-
-// Store selected elements with their fixed positions
-interface SelectedElementWithPosition extends ElementInfo {
-  fixedRect: DOMRect; // Position at time of selection (won't move on scroll)
-}
 
 export function App() {
   const {
@@ -20,64 +14,208 @@ export function App() {
   } = useStore();
 
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
-  const [selectedElements, setSelectedElements] = useState<SelectedElementWithPosition[]>([]);
+  const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
+  const [currentRect, setCurrentRect] = useState<DOMRect | null>(null);
+  const selectedDomElement = useRef<HTMLElement | null>(null);
+  const hoveredDomElement = useRef<Element | null>(null);
+  const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Get the deepest element at a point (works with SVG, disabled elements, etc.)
+  const getElementAtPoint = useCallback((x: number, y: number): Element | null => {
+    // Collect ALL elements in the document and find ones containing the point
+    const allElements = document.querySelectorAll('*');
+    const matches: { el: Element; depth: number }[] = [];
+
+    for (const el of allElements) {
+      // Skip our overlay
+      if (el.closest('#visual-feedback-overlay')) continue;
+      if (el.id === 'visual-feedback-overlay') continue;
+
+      // Get bounding rect
+      const rect = el.getBoundingClientRect();
+
+      // Skip elements with no size
+      if (rect.width === 0 || rect.height === 0) continue;
+
+      // Check if point is inside
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        // Calculate depth (how nested is this element)
+        let depth = 0;
+        let p = el.parentElement;
+        while (p) {
+          depth++;
+          p = p.parentElement;
+        }
+
+        matches.push({ el, depth });
+      }
+    }
+
+    // Sort by depth (deepest first) and return the deepest
+    if (matches.length > 0) {
+      matches.sort((a, b) => b.depth - a.depth);
+      return matches[0].el;
+    }
+
+    return null;
+  }, []);
 
   // Handle mouse move for hover detection
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isActive || isDraggingPanel) return;
+    // Always track mouse position
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
 
-    const target = e.target as HTMLElement;
+    if (!isActive || isDraggingPanel || selectedElement) return;
 
-    // Ignore our own overlay elements
-    if (target.closest('#visual-feedback-overlay')) return;
+    const target = getElementAtPoint(e.clientX, e.clientY);
+    if (!target) return;
 
-    const elementInfo = getElementInfo(target);
+    // Store the DOM element reference for spacebar selection
+    hoveredDomElement.current = target;
+
+    // Handle both HTML and SVG elements
+    const htmlTarget = target instanceof HTMLElement ? target : target as unknown as HTMLElement;
+    const elementInfo = getElementInfo(htmlTarget);
     hoverElement(elementInfo);
-  }, [isActive, isDraggingPanel, hoverElement]);
+  }, [isActive, isDraggingPanel, selectedElement, hoverElement, getElementAtPoint]);
 
-  // Handle click to select element (add to list)
+  // Handle click to select element (one at a time)
   const handleClick = useCallback((e: MouseEvent) => {
-    if (!isActive) return;
+    if (!isActive || selectedElement) return;
 
-    const target = e.target as HTMLElement;
-
-    // Ignore our own overlay elements
-    if (target.closest('#visual-feedback-overlay')) return;
+    const target = getElementAtPoint(e.clientX, e.clientY);
+    if (!target) return;
 
     e.preventDefault();
     e.stopPropagation();
 
-    const elementInfo = getElementInfo(target);
+    // Handle both HTML and SVG elements
+    const htmlTarget = target instanceof HTMLElement ? target : target as unknown as HTMLElement;
+    const elementInfo = getElementInfo(htmlTarget);
 
-    // Store with fixed position at time of click
-    const elementWithFixedPos: SelectedElementWithPosition = {
-      ...elementInfo,
-      fixedRect: elementInfo.rect, // Capture position now
+    // Store DOM element reference for scroll tracking
+    selectedDomElement.current = htmlTarget;
+    setSelectedElement(elementInfo);
+    setCurrentRect(target.getBoundingClientRect());
+  }, [isActive, selectedElement, getElementAtPoint]);
+
+  // Update rect continuously using RAF for smooth tracking
+  useEffect(() => {
+    if (!selectedDomElement.current) return;
+
+    let rafId: number;
+    let lastRect = '';
+
+    const updateRect = () => {
+      if (selectedDomElement.current) {
+        const rect = selectedDomElement.current.getBoundingClientRect();
+        // Only update state if rect actually changed (avoid unnecessary renders)
+        const rectStr = `${rect.top},${rect.left},${rect.width},${rect.height}`;
+        if (rectStr !== lastRect) {
+          lastRect = rectStr;
+          setCurrentRect(rect);
+        }
+      }
+      rafId = requestAnimationFrame(updateRect);
     };
 
-    setSelectedElements(prev => [...prev, elementWithFixedPos]);
-  }, [isActive]);
+    rafId = requestAnimationFrame(updateRect);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [selectedElement]);
+
+  // Clear DOM ref when element is deselected
+  const clearSelection = useCallback(() => {
+    selectedDomElement.current = null;
+    setSelectedElement(null);
+    setCurrentRect(null);
+  }, []);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      if (selectedElements.length > 0) {
-        setSelectedElements([]);
+      if (selectedElement) {
+        clearSelection();
       } else if (isActive) {
         setActive(false);
       }
     }
-  }, [isActive, selectedElements.length, setActive]);
+
+    // Spacebar selects the currently hovered element
+    if (e.key === ' ' && isActive && !selectedElement) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Use stored DOM element reference
+      const target = hoveredDomElement.current;
+      if (target) {
+        const htmlTarget = target instanceof HTMLElement ? target : target as unknown as HTMLElement;
+        const elementInfo = getElementInfo(htmlTarget);
+        selectedDomElement.current = htmlTarget;
+        setSelectedElement(elementInfo);
+        setCurrentRect(target.getBoundingClientRect());
+      }
+    }
+
+    // Arrow Up - go to parent element
+    if (e.key === 'ArrowUp' && isActive && !selectedElement && hoveredDomElement.current) {
+      e.preventDefault();
+      const parent = hoveredDomElement.current.parentElement;
+      if (parent && parent !== document.body && !parent.closest('#visual-feedback-overlay')) {
+        hoveredDomElement.current = parent;
+        const htmlTarget = parent instanceof HTMLElement ? parent : parent as unknown as HTMLElement;
+        const elementInfo = getElementInfo(htmlTarget);
+        hoverElement(elementInfo);
+      }
+    }
+
+    // Arrow Down - go to child element at mouse position
+    if (e.key === 'ArrowDown' && isActive && !selectedElement && hoveredDomElement.current) {
+      e.preventDefault();
+      const { x, y } = lastMousePos.current;
+
+      // Find children that contain the mouse point
+      const children = Array.from(hoveredDomElement.current.children);
+      for (const child of children) {
+        if (child.closest('#visual-feedback-overlay')) continue;
+        const rect = child.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          hoveredDomElement.current = child;
+          const htmlTarget = child instanceof HTMLElement ? child : child as unknown as HTMLElement;
+          const elementInfo = getElementInfo(htmlTarget);
+          hoverElement(elementInfo);
+          break;
+        }
+      }
+    }
+  }, [isActive, selectedElement, setActive, clearSelection, hoverElement]);
 
   // Set up event listeners
   useEffect(() => {
+    let styleEl: HTMLStyleElement | null = null;
+
     if (isActive) {
       document.addEventListener('mousemove', handleMouseMove, true);
       document.addEventListener('click', handleClick, true);
       document.addEventListener('keydown', handleKeyDown, true);
 
-      // Add body class for cursor change
+      // Inject aggressive style override to enable clicking on ALL elements
+      styleEl = document.createElement('style');
+      styleEl.id = 'vf-pointer-override';
+      styleEl.textContent = `
+        *, *::before, *::after,
+        *:disabled, [disabled], [aria-disabled="true"],
+        button:disabled, input:disabled, select:disabled, textarea:disabled {
+          pointer-events: auto !important;
+          cursor: crosshair !important;
+        }
+      `;
+      document.head.appendChild(styleEl);
+
       document.body.style.cursor = 'crosshair';
+      document.body.classList.add('vf-tool-active');
     }
 
     return () => {
@@ -85,65 +223,58 @@ export function App() {
       document.removeEventListener('click', handleClick, true);
       document.removeEventListener('keydown', handleKeyDown, true);
       document.body.style.cursor = '';
+      document.body.classList.remove('vf-tool-active');
+
+      // Remove injected style
+      if (styleEl && styleEl.parentNode) {
+        styleEl.parentNode.removeChild(styleEl);
+      }
+      const existingStyle = document.getElementById('vf-pointer-override');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
     };
   }, [isActive, handleMouseMove, handleClick, handleKeyDown]);
 
   // Listen for messages from background script
   useEffect(() => {
-    const handleMessage = (message: { type: string; active?: boolean }) => {
-      console.log('[VF] Received message:', message);
-      if (message.type === 'TOGGLE_ACTIVE') {
-        console.log('[VF] Toggling active state from', isActive, 'to', !isActive);
-        setActive(!isActive);
-      } else if (message.type === 'SET_ACTIVE' && message.active !== undefined) {
-        console.log('[VF] Setting active state to', message.active);
+    const handleMessage = (message: { type: string; active?: boolean; status?: string }) => {
+      if (message.type === 'SET_ACTIVE' && message.active !== undefined) {
         setActive(message.active);
+      } else if (message.type === 'CONNECTION_STATUS') {
+        // Could update UI to show connection status
+        console.log('[VF] Connection status:', message.status);
       }
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
-    console.log('[VF] Message listener registered, current isActive:', isActive);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [isActive, setActive]);
+  }, [setActive]);
 
   if (!isActive) return null;
 
-  // Remove a selected element by index
-  const removeSelectedElement = (index: number) => {
-    setSelectedElements(prev => prev.filter((_, i) => i !== index));
-  };
-
   return (
     <div className="vf-overlay">
-      {/* Breadcrumb bar at top - show for first selected element */}
-      {selectedElements.length > 0 && (
-        <BreadcrumbBar
-          element={selectedElements[0]}
-          onSelectPath={() => {}}
-        />
-      )}
-
-      {/* Hover highlight - only show when no panels are open */}
-      {hoveredElement && selectedElements.length === 0 && (
+      {/* Hover highlight - only show when no element is selected */}
+      {hoveredElement && !selectedElement && (
         <ElementHighlight element={hoveredElement} type="hover" />
       )}
 
-      {/* Selected elements - each with highlight and panel */}
-      {selectedElements.map((element, index) => (
-        <div key={`${element.selector}-${index}`}>
-          {/* Use fixedRect for position */}
+      {/* Selected element with highlight and panel */}
+      {selectedElement && currentRect && (
+        <>
           <ElementHighlight
-            element={{ ...element, rect: element.fixedRect }}
+            element={{ ...selectedElement, rect: currentRect }}
             type="selected"
           />
           <FloatingPanel
-            element={{ ...element, rect: element.fixedRect }}
+            element={{ ...selectedElement, rect: currentRect }}
             onDragStart={() => setIsDraggingPanel(true)}
             onDragEnd={() => setIsDraggingPanel(false)}
-            onClose={() => removeSelectedElement(index)}
+            onClose={clearSelection}
           />
-        </div>
-      ))}
+        </>
+      )}
     </div>
   );
 }

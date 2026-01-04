@@ -1,0 +1,12 @@
+{
+  "name": "visual-feedback-server",
+  "version": "1.0.0",
+  "description": "Simple server for Visual Feedback Chrome extension",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.0"
+  }
+}

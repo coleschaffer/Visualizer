@@ -270,7 +270,7 @@ function getOverlayStyles(): string {
 
     .vf-chat-input {
       flex: 1;
-      border: 1px solid rgba(0, 0, 0, 0.1);
+      border: 1px solid #e5e7eb;
       border-radius: 8px;
       padding: 12px;
       font-size: 13px;
@@ -278,6 +278,12 @@ function getOverlayStyles(): string {
       outline: none;
       min-height: 80px;
       font-family: inherit;
+      background: #ffffff;
+      color: #1f2937;
+    }
+
+    .vf-chat-input::placeholder {
+      color: #9ca3af;
     }
 
     .vf-chat-input:focus {

@@ -8,3 +8,16 @@
   pointer-events: none !important;
   z-index: 2147483647 !important;
 }
+
+/* When tool is active, allow clicking on disabled/blocked elements */
+body.vf-tool-active,
+body.vf-tool-active *,
+body.vf-tool-active *::before,
+body.vf-tool-active *::after,
+body.vf-tool-active *:disabled,
+body.vf-tool-active [disabled],
+body.vf-tool-active [aria-disabled="true"],
+body.vf-tool-active .disabled {
+  pointer-events: auto !important;
+  cursor: crosshair !important;
+}
