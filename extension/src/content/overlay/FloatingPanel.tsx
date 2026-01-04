@@ -37,10 +37,17 @@ export function FloatingPanel({
     if (relativeOffset.current && initialElementPos.current) {
       const deltaX = rect.left - initialElementPos.current.left;
       const deltaY = rect.top - initialElementPos.current.top;
-      return {
-        x: relativeOffset.current.x + deltaX,
-        y: relativeOffset.current.y + deltaY,
-      };
+      let x = relativeOffset.current.x + deltaX;
+      let y = relativeOffset.current.y + deltaY;
+
+      // Clamp to viewport even when dragged
+      const panelWidth = 320;
+      const panelHeight = 200;
+      const padding = 12;
+      x = Math.max(padding, Math.min(x, window.innerWidth - panelWidth - padding));
+      y = Math.max(padding, Math.min(y, window.innerHeight - panelHeight - padding));
+
+      return { x, y };
     }
 
     // Initial positioning near element
@@ -48,25 +55,41 @@ export function FloatingPanel({
     const panelHeight = 200;
     const padding = 12;
 
-    let x = rect.right + padding;
-    let y = rect.top;
+    let x: number;
+    let y: number;
 
-    if (x + panelWidth > window.innerWidth) {
+    // Try right side first
+    if (rect.right + padding + panelWidth <= window.innerWidth) {
+      x = rect.right + padding;
+    }
+    // Try left side
+    else if (rect.left - padding - panelWidth >= 0) {
       x = rect.left - panelWidth - padding;
     }
-
-    if (x < 0) {
-      x = Math.max(padding, rect.left);
-      y = rect.bottom + padding;
+    // Center horizontally if neither side works
+    else {
+      x = Math.max(padding, Math.min(
+        (window.innerWidth - panelWidth) / 2,
+        window.innerWidth - panelWidth - padding
+      ));
     }
 
-    if (y + panelHeight > window.innerHeight) {
-      y = Math.max(padding, window.innerHeight - panelHeight - padding);
+    // Vertical positioning - try to align with element top
+    y = rect.top;
+
+    // If panel would go below viewport, move it up
+    if (y + panelHeight > window.innerHeight - padding) {
+      y = window.innerHeight - panelHeight - padding;
     }
 
-    if (y < 0) {
+    // If panel would go above viewport, move it down
+    if (y < padding) {
       y = padding;
     }
+
+    // Final clamp to ensure fully visible
+    x = Math.max(padding, Math.min(x, window.innerWidth - panelWidth - padding));
+    y = Math.max(padding, Math.min(y, window.innerHeight - panelHeight - padding));
 
     // Store initial offset on first calculation
     if (!relativeOffset.current) {
