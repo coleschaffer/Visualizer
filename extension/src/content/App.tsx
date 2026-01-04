@@ -133,7 +133,7 @@ export function App() {
     setCurrentRect(null);
   }, []);
 
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts (when active)
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       if (selectedElement) {
@@ -171,26 +171,93 @@ export function App() {
       }
     }
 
-    // Arrow Down - go to child element at mouse position
+    // Arrow Down - go to child element at mouse position (or first visible child)
     if (e.key === 'ArrowDown' && isActive && !selectedElement && hoveredDomElement.current) {
       e.preventDefault();
       const { x, y } = lastMousePos.current;
 
       // Find children that contain the mouse point
       const children = Array.from(hoveredDomElement.current.children);
+      let foundChild: Element | null = null;
+
+      // First try to find a child that contains the mouse position
       for (const child of children) {
         if (child.closest('#visual-feedback-overlay')) continue;
         const rect = child.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
         if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          hoveredDomElement.current = child;
-          const htmlTarget = child instanceof HTMLElement ? child : child as unknown as HTMLElement;
-          const elementInfo = getElementInfo(htmlTarget);
-          hoverElement(elementInfo);
+          foundChild = child;
           break;
         }
       }
+
+      // If no child at mouse position, find the first visible child
+      if (!foundChild) {
+        for (const child of children) {
+          if (child.closest('#visual-feedback-overlay')) continue;
+          const rect = child.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            foundChild = child;
+            break;
+          }
+        }
+      }
+
+      if (foundChild) {
+        hoveredDomElement.current = foundChild;
+        const htmlTarget = foundChild instanceof HTMLElement ? foundChild : foundChild as unknown as HTMLElement;
+        const elementInfo = getElementInfo(htmlTarget);
+        hoverElement(elementInfo);
+      }
+    }
+
+    // Arrow Left/Right - cycle through sibling elements
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && isActive && !selectedElement && hoveredDomElement.current) {
+      e.preventDefault();
+      const parent = hoveredDomElement.current.parentElement;
+      if (!parent || parent === document.body) return;
+
+      const siblings = Array.from(parent.children).filter(child => {
+        if (child.closest('#visual-feedback-overlay')) return false;
+        const rect = child.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+
+      const currentIndex = siblings.indexOf(hoveredDomElement.current);
+      if (currentIndex === -1) return;
+
+      let nextIndex: number;
+      if (e.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % siblings.length;
+      } else {
+        nextIndex = (currentIndex - 1 + siblings.length) % siblings.length;
+      }
+
+      const nextSibling = siblings[nextIndex];
+      if (nextSibling) {
+        hoveredDomElement.current = nextSibling;
+        const htmlTarget = nextSibling instanceof HTMLElement ? nextSibling : nextSibling as unknown as HTMLElement;
+        const elementInfo = getElementInfo(htmlTarget);
+        hoverElement(elementInfo);
+      }
     }
   }, [isActive, selectedElement, setActive, clearSelection, hoverElement]);
+
+  // Global toggle shortcut - always active
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + Shift + V to toggle enable/disable
+      if (e.key === 'v' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        setActive(!isActive);
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [isActive, setActive]);
 
   // Set up event listeners
   useEffect(() => {
