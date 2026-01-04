@@ -237,7 +237,10 @@ function buildPrompt(feedback, element, pageUrl, beadContext) {
     `2. Find the source file containing this element using the selector, classes, and DOM path as hints`,
     `3. Make the requested change`,
     `4. Commit the change with a descriptive message`,
-    `5. Push to GitHub`
+    `5. Push to GitHub`,
+    `6. **IMPORTANT**: After pushing, output the commit hash in this exact format:`,
+    `   COMMIT_HASH: <full-40-character-hash>`,
+    `   This is required for tracking purposes.`
   );
 
   return lines.join('\n');
@@ -408,7 +411,9 @@ wss.on('connection', (ws) => {
           task.exitCode = code;
 
           // Try to extract commit hash and GitHub URL from log
-          const commitMatch = task.log.match(/\[([a-f0-9]{7,40})\]/i) ||
+          // Look for our explicit format first, then fall back to common git output patterns
+          const commitMatch = task.log.match(/COMMIT_HASH:\s*([a-f0-9]{40})/i) ||
+                              task.log.match(/\[([a-f0-9]{7,40})\]/i) ||
                               task.log.match(/commit\s+([a-f0-9]{7,40})/i);
           if (commitMatch) {
             task.commitHash = commitMatch[1];
