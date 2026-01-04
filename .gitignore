@@ -31,3 +31,6 @@ server/tasks.json
 
 # Beads element tracking (generated per-project)
 .beads/
+
+# Claude Code exports
+*.txt
