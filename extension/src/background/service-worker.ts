@@ -22,6 +22,7 @@ let connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnecte
 let serverPort: number | null = null;
 let projectPath: string = '/tmp';
 let selectedModel: string = 'claude-opus-4-5-20251101';
+let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 
 // Load project path, server port, and model from storage on startup
 chrome.storage.local.get(['projectPath', 'serverPort', 'selectedModel']).then((result) => {
@@ -175,27 +176,45 @@ async function connect(port: number) {
       console.log('[VF] Connected to server');
       connectionStatus = 'connected';
       broadcastStatus();
+
+      // Start keep-alive ping to prevent service worker from sleeping
+      if (keepAliveInterval) clearInterval(keepAliveInterval);
+      keepAliveInterval = setInterval(() => {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'ping' }));
+          console.log('[VF] Sent keep-alive ping');
+        }
+      }, 20000); // Ping every 20 seconds
     };
 
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('[VF] Server message:', data);
+        console.log('[VF] Server message:', data.type, data.task?.id, data.task?.status);
 
         // Forward task updates to all tabs
         if (data.type === 'task_update' && data.task) {
+          console.log('[VF] Broadcasting task update to tabs:', data.task.id, data.task.status);
           chrome.tabs.query({}, (tabs) => {
+            console.log('[VF] Found', tabs.length, 'tabs');
             tabs.forEach((tab) => {
               if (tab.id) {
+                console.log('[VF] Sending TASK_UPDATE to tab', tab.id, tab.url?.slice(0, 50));
                 chrome.tabs.sendMessage(tab.id, {
                   type: 'TASK_UPDATE',
                   task: data.task,
-                }).catch(() => {});
+                }).then(() => {
+                  console.log('[VF] Successfully sent to tab', tab.id);
+                }).catch((err) => {
+                  console.log('[VF] Failed to send to tab', tab.id, err.message);
+                });
               }
             });
           });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('[VF] Error processing server message:', e);
+      }
     };
 
     socket.onerror = (error) => {
@@ -206,6 +225,10 @@ async function connect(port: number) {
 
     socket.onclose = () => {
       console.log('[VF] Disconnected from server');
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+      }
       connectionStatus = 'disconnected';
       socket = null;
       broadcastStatus();
@@ -225,6 +248,10 @@ async function connect(port: number) {
 }
 
 function disconnect() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
   if (socket) {
     socket.close();
     socket = null;

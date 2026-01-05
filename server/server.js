@@ -171,11 +171,19 @@ function addTask(task) {
 // Broadcast task updates to all connected clients
 function broadcastTaskUpdate(task) {
   const message = JSON.stringify({ type: 'task_update', task });
+  const clientCount = wss.clients.size;
+  let sentCount = 0;
+  console.log(`[Broadcast] Sending task_update for ${task.id} (status: ${task.status}) to ${clientCount} clients`);
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
       client.send(message);
+      sentCount++;
+      console.log(`[Broadcast] Sent to client (${sentCount}/${clientCount})`);
+    } else {
+      console.log(`[Broadcast] Skipped client with readyState ${client.readyState}`);
     }
   });
+  console.log(`[Broadcast] Complete: ${sentCount}/${clientCount} clients received message`);
 }
 
 // Build rich prompt with all context
@@ -311,6 +319,11 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data.toString());
       console.log('Received:', msg.type);
+
+      // Handle keep-alive pings silently
+      if (msg.type === 'ping') {
+        return;
+      }
 
       if (msg.type === 'visual_feedback') {
         const { id, feedback, element, projectPath, pageUrl, model } = msg.payload;

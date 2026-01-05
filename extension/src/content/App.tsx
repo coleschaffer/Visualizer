@@ -180,10 +180,25 @@ export function App() {
 
   // Listen for task completion updates
   useEffect(() => {
-    if (!pendingTask) return;
+    // Always set up listener to log all messages, even without pending task
+    const handleAllMessages = (message: { type: string; task?: { id: string; status: string } }) => {
+      console.log('[VF] Content received message:', message.type, message.task?.id, message.task?.status);
+    };
+    chrome.runtime.onMessage.addListener(handleAllMessages);
+
+    if (!pendingTask) {
+      console.log('[VF] No pending task, but listener is active for debugging');
+      return () => chrome.runtime.onMessage.removeListener(handleAllMessages);
+    }
+
+    console.log('[VF] Setting up task listener for:', pendingTask.taskId);
 
     const handleTaskUpdate = (message: { type: string; task?: { id: string; status: string } }) => {
+      console.log('[VF] Task listener received:', message.type, message.task?.id, message.task?.status);
+      console.log('[VF] Waiting for taskId:', pendingTask.taskId);
+
       if (message.type === 'TASK_UPDATE' && message.task && message.task.id === pendingTask.taskId) {
+        console.log('[VF] Task matched! Status:', message.task.status);
         if (message.task.status === 'complete') {
           // Play sound and show success
           try {
@@ -220,6 +235,7 @@ export function App() {
 
     chrome.runtime.onMessage.addListener(handleTaskUpdate);
     return () => {
+      chrome.runtime.onMessage.removeListener(handleAllMessages);
       chrome.runtime.onMessage.removeListener(handleTaskUpdate);
     };
   }, [pendingTask?.taskId]);
