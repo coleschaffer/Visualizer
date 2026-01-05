@@ -457,37 +457,34 @@ export function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: pendingTask.status === 'done'
-              ? 'rgba(34, 197, 94, 0.85)'
-              : pendingTask.status === 'error'
-              ? 'rgba(239, 68, 68, 0.85)'
-              : 'rgba(59, 130, 246, 0.85)',
+            background: 'rgba(255, 255, 255, 0.95)',
             borderRadius: '4px',
             zIndex: 2147483645,
             pointerEvents: 'none',
             transition: 'opacity 1s ease-out',
             opacity: pendingTask.fading ? 0 : 1,
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
           }}
         >
-          {/* Spinner for working state */}
+          {/* Spinner for working state - blue */}
           {pendingTask.status === 'working' && (
             <div style={{
               width: '32px',
               height: '32px',
-              border: '3px solid rgba(255,255,255,0.3)',
-              borderTopColor: 'white',
+              border: '3px solid rgba(59, 130, 246, 0.2)',
+              borderTopColor: '#3b82f6',
               borderRadius: '50%',
               animation: 'vf-spin 1s linear infinite',
             }} />
           )}
-          {/* Checkmark for done state */}
+          {/* Checkmark for done state - green */}
           {pendingTask.status === 'done' && (
             <svg
               width="32"
               height="32"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="white"
+              stroke="#22c55e"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -495,14 +492,14 @@ export function App() {
               <polyline points="20 6 9 17 4 12" />
             </svg>
           )}
-          {/* X for error state */}
+          {/* X for error state - red */}
           {pendingTask.status === 'error' && (
             <svg
               width="32"
               height="32"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="white"
+              stroke="#ef4444"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
