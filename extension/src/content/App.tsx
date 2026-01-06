@@ -22,6 +22,7 @@ export function App() {
   // Toast notifications state (multiple tasks can be pending)
   const [toasts, setToasts] = useState<{
     taskId: string;
+    elementName: string;
     status: 'working' | 'done' | 'error';
     fading: boolean;
     dismissed: boolean;
@@ -173,10 +174,11 @@ export function App() {
   }, []);
 
   // Handle task submission - show toast notification and close panel
-  const handleTaskSubmitted = useCallback((taskId: string, _rect: DOMRect) => {
-    setToasts(prev => [...prev, { taskId, status: 'working', fading: false, dismissed: false }]);
+  const handleTaskSubmitted = useCallback((taskId: string, _rect: DOMRect, elementName?: string) => {
+    const name = elementName || selectedElement?.selector || 'element';
+    setToasts(prev => [...prev, { taskId, elementName: name, status: 'working', fading: false, dismissed: false }]);
     clearSelection(); // Close the panel
-  }, [clearSelection]);
+  }, [clearSelection, selectedElement?.selector]);
 
   // Dismiss a toast (doesn't stop the task)
   const dismissToast = useCallback((taskId: string) => {
@@ -441,7 +443,94 @@ export function App() {
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [setActive]);
 
-  if (!isActive) return null;
+  // Toast notifications render (always visible, even when tool is inactive)
+  const toastContainer = (
+    <div className="vf-toast-container">
+      {toasts.filter(t => !t.dismissed).map((toast, index) => (
+        <div
+          key={toast.taskId}
+          className={`vf-toast ${toast.fading ? 'vf-toast--fading' : ''}`}
+          style={{ top: `${16 + index * 56}px` }}
+        >
+          <div className="vf-toast-content">
+            {/* Spinner for working state */}
+            {toast.status === 'working' && (
+              <>
+                <div className="vf-toast-spinner" />
+                <span className="vf-toast-text">Working...</span>
+              </>
+            )}
+            {/* Checkmark for done state */}
+            {toast.status === 'done' && (
+              <>
+                <svg
+                  className="vf-toast-icon vf-toast-icon--success"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#22c55e"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span className="vf-toast-text">Success!</span>
+              </>
+            )}
+            {/* X for error state */}
+            {toast.status === 'error' && (
+              <>
+                <svg
+                  className="vf-toast-icon vf-toast-icon--error"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <span className="vf-toast-text vf-toast-text--error">Failed</span>
+              </>
+            )}
+            {/* Element name */}
+            <span className="vf-toast-element">{toast.elementName}</span>
+          </div>
+          {/* Dismiss button */}
+          <button
+            className="vf-toast-dismiss"
+            onClick={() => dismissToast(toast.taskId)}
+            title="Dismiss (task continues in background)"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+
+  // If not active, only render toasts
+  if (!isActive) {
+    return toasts.length > 0 ? <div className="vf-overlay">{toastContainer}</div> : null;
+  }
 
   return (
     <div className="vf-overlay">
@@ -471,82 +560,7 @@ export function App() {
       )}
 
       {/* Toast notifications in top left */}
-      <div className="vf-toast-container">
-        {toasts.filter(t => !t.dismissed).map((toast, index) => (
-          <div
-            key={toast.taskId}
-            className={`vf-toast ${toast.fading ? 'vf-toast--fading' : ''}`}
-            style={{ top: `${16 + index * 60}px` }}
-          >
-            {/* Spinner for working state */}
-            {toast.status === 'working' && (
-              <>
-                <div className="vf-toast-spinner" />
-                <span className="vf-toast-text">Working...</span>
-              </>
-            )}
-            {/* Checkmark for done state */}
-            {toast.status === 'done' && (
-              <>
-                <svg
-                  className="vf-toast-icon vf-toast-icon--success"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#22c55e"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span className="vf-toast-text vf-toast-text--success">Success!</span>
-              </>
-            )}
-            {/* X for error state */}
-            {toast.status === 'error' && (
-              <>
-                <svg
-                  className="vf-toast-icon vf-toast-icon--error"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-                <span className="vf-toast-text vf-toast-text--error">Failed</span>
-              </>
-            )}
-            {/* Dismiss button */}
-            <button
-              className="vf-toast-dismiss"
-              onClick={() => dismissToast(toast.taskId)}
-              title="Dismiss (task continues in background)"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        ))}
-      </div>
+      {toastContainer}
     </div>
   );
 }
