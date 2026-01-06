@@ -84,10 +84,11 @@ cd server && node server.js > server.log 2>&1 &
 - Great for "make this the same color as [.navbar-link]" type feedback
 - Press `Esc` to cancel reference mode
 
-### Visual Feedback
-- **Working Overlay** - Blue spinner overlay on element while sending
-- **Success Overlay** - Green checkmark when task is sent successfully
-- **Fade Animation** - Overlay fades away smoothly after success
+### Toast Notifications
+- **Working Toast** - White toast with blue spinner and "Working..." text in top left
+- **Success Toast** - Green checkmark with "Success!" when task completes, then fades away
+- **Dismissible** - Click X to dismiss toast (doesn't stop the task, just hides notification)
+- **Multiple Tasks** - Multiple toasts stack vertically for concurrent tasks
 - **Copy Element Name** - Click element name in panel header to copy selector
 
 ### Task History
@@ -136,7 +137,7 @@ cd server && node server.js > server.log 2>&1 &
 
 | Key | Action |
 |-----|--------|
-| `Cmd/Ctrl+Shift+V` | Toggle enable/disable (works anywhere) |
+| `Ctrl` | Toggle enable/disable (works anywhere) |
 | `Click` | Select element under cursor |
 | `Space` | Select currently hovered element |
 | `↑` Arrow Up | Navigate to parent element |

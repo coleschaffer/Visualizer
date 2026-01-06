@@ -386,14 +386,88 @@ function getOverlayStyles(): string {
       color: #1f2937;
     }
 
-    /* Spinner animation for element overlay */
+    /* Spinner animation */
     @keyframes vf-spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
 
-    .vf-element-overlay {
+    /* Toast notifications */
+    .vf-toast-container {
+      position: fixed;
+      top: 0;
+      left: 16px;
+      z-index: 2147483646;
+      pointer-events: auto;
+    }
+
+    .vf-toast {
+      position: absolute;
+      left: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
       font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      transition: opacity 0.5s ease-out, transform 0.3s ease-out;
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .vf-toast--fading {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+
+    .vf-toast-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(59, 130, 246, 0.2);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: vf-spin 1s linear infinite;
+    }
+
+    .vf-toast-text {
+      color: #374151;
+      font-weight: 500;
+    }
+
+    .vf-toast-text--success {
+      color: #22c55e;
+    }
+
+    .vf-toast-text--error {
+      color: #ef4444;
+    }
+
+    .vf-toast-icon {
+      flex-shrink: 0;
+    }
+
+    .vf-toast-dismiss {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      margin-left: 4px;
+      padding: 0;
+      background: none;
+      border: none;
+      border-radius: 4px;
+      color: #9ca3af;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .vf-toast-dismiss:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: #6b7280;
     }
   `;
 }

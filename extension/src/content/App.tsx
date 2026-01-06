@@ -19,13 +19,13 @@ export function App() {
   const [isReferencing, setIsReferencing] = useState(false);
   const [referencedElement, setReferencedElement] = useState<ElementInfo | null>(null);
 
-  // Task overlay state (persists after panel closes)
-  const [pendingTask, setPendingTask] = useState<{
+  // Toast notifications state (multiple tasks can be pending)
+  const [toasts, setToasts] = useState<{
     taskId: string;
-    rect: DOMRect;
     status: 'working' | 'done' | 'error';
     fading: boolean;
-  } | null>(null);
+    dismissed: boolean;
+  }[]>([]);
 
   const selectedDomElement = useRef<HTMLElement | null>(null);
   const hoveredDomElement = useRef<Element | null>(null);
@@ -172,73 +172,82 @@ export function App() {
     // Don't clear referencedElement here - FloatingPanel will handle it
   }, []);
 
-  // Handle task submission - show overlay and close panel
-  const handleTaskSubmitted = useCallback((taskId: string, rect: DOMRect) => {
-    setPendingTask({ taskId, rect, status: 'working', fading: false });
+  // Handle task submission - show toast notification and close panel
+  const handleTaskSubmitted = useCallback((taskId: string, _rect: DOMRect) => {
+    setToasts(prev => [...prev, { taskId, status: 'working', fading: false, dismissed: false }]);
     clearSelection(); // Close the panel
   }, [clearSelection]);
 
+  // Dismiss a toast (doesn't stop the task)
+  const dismissToast = useCallback((taskId: string) => {
+    setToasts(prev => prev.map(t =>
+      t.taskId === taskId ? { ...t, dismissed: true } : t
+    ));
+  }, []);
+
   // Listen for task completion updates
   useEffect(() => {
-    // Always set up listener to log all messages, even without pending task
-    const handleAllMessages = (message: { type: string; task?: { id: string; status: string } }) => {
-      console.log('[VF] Content received message:', message.type, message.task?.id, message.task?.status);
-    };
-    chrome.runtime.onMessage.addListener(handleAllMessages);
-
-    if (!pendingTask) {
-      console.log('[VF] No pending task, but listener is active for debugging');
-      return () => chrome.runtime.onMessage.removeListener(handleAllMessages);
-    }
-
-    console.log('[VF] Setting up task listener for:', pendingTask.taskId);
-
     const handleTaskUpdate = (message: { type: string; task?: { id: string; status: string } }) => {
       console.log('[VF] Task listener received:', message.type, message.task?.id, message.task?.status);
-      console.log('[VF] Waiting for taskId:', pendingTask.taskId);
 
-      if (message.type === 'TASK_UPDATE' && message.task && message.task.id === pendingTask.taskId) {
-        console.log('[VF] Task matched! Status:', message.task.status);
-        if (message.task.status === 'complete') {
-          // Play sound and show success
-          try {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.frequency.value = 800;
-            oscillator.type = 'sine';
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.1);
-          } catch {}
+      if (message.type === 'TASK_UPDATE' && message.task) {
+        const taskId = message.task.id;
+        const taskStatus = message.task.status;
 
-          setPendingTask(prev => prev ? { ...prev, status: 'done' } : null);
-          // Start fading after showing success
-          setTimeout(() => {
-            setPendingTask(prev => prev ? { ...prev, fading: true } : null);
-          }, 1500);
-          // Remove overlay after fade
-          setTimeout(() => {
-            setPendingTask(null);
-          }, 3000);
-        } else if (message.task.status === 'failed') {
-          setPendingTask(prev => prev ? { ...prev, status: 'error' } : null);
-          setTimeout(() => {
-            setPendingTask(null);
-          }, 3000);
-        }
+        setToasts(prev => {
+          const toastIndex = prev.findIndex(t => t.taskId === taskId);
+          if (toastIndex === -1) return prev;
+
+          const newToasts = [...prev];
+
+          if (taskStatus === 'complete') {
+            // Play sound
+            try {
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              oscillator.frequency.value = 800;
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.1);
+            } catch {}
+
+            newToasts[toastIndex] = { ...newToasts[toastIndex], status: 'done' };
+
+            // Start fading after showing success
+            setTimeout(() => {
+              setToasts(p => p.map(t =>
+                t.taskId === taskId ? { ...t, fading: true } : t
+              ));
+            }, 1500);
+
+            // Remove toast after fade
+            setTimeout(() => {
+              setToasts(p => p.filter(t => t.taskId !== taskId));
+            }, 3000);
+          } else if (taskStatus === 'failed') {
+            newToasts[toastIndex] = { ...newToasts[toastIndex], status: 'error' };
+
+            // Remove toast after delay
+            setTimeout(() => {
+              setToasts(p => p.filter(t => t.taskId !== taskId));
+            }, 3000);
+          }
+
+          return newToasts;
+        });
       }
     };
 
     chrome.runtime.onMessage.addListener(handleTaskUpdate);
     return () => {
-      chrome.runtime.onMessage.removeListener(handleAllMessages);
       chrome.runtime.onMessage.removeListener(handleTaskUpdate);
     };
-  }, [pendingTask?.taskId]);
+  }, []);
 
   // Handle keyboard shortcuts (when active)
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -357,11 +366,11 @@ export function App() {
     }
   }, [isActive, selectedElement, isReferencing, setActive, clearSelection, hoverElement, setReferencedElement]);
 
-  // Global toggle shortcut - always active
+  // Global toggle shortcut - Ctrl key to toggle
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + Shift + V to toggle enable/disable
-      if (e.key === 'v' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      // Ctrl key alone to toggle enable/disable
+      if (e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         setActive(!isActive);
       }
@@ -461,71 +470,83 @@ export function App() {
         </>
       )}
 
-      {/* Task progress overlay (persists after panel closes) */}
-      {pendingTask && (
-        <div
-          style={{
-            position: 'fixed',
-            left: pendingTask.rect.left,
-            top: pendingTask.rect.top,
-            width: pendingTask.rect.width,
-            height: pendingTask.rect.height,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '4px',
-            zIndex: 2147483645,
-            pointerEvents: 'none',
-            transition: 'opacity 1s ease-out',
-            opacity: pendingTask.fading ? 0 : 1,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          {/* Spinner for working state - blue */}
-          {pendingTask.status === 'working' && (
-            <div style={{
-              width: '32px',
-              height: '32px',
-              border: '3px solid rgba(59, 130, 246, 0.2)',
-              borderTopColor: '#3b82f6',
-              borderRadius: '50%',
-              animation: 'vf-spin 1s linear infinite',
-            }} />
-          )}
-          {/* Checkmark for done state - green */}
-          {pendingTask.status === 'done' && (
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#22c55e"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      {/* Toast notifications in top left */}
+      <div className="vf-toast-container">
+        {toasts.filter(t => !t.dismissed).map((toast, index) => (
+          <div
+            key={toast.taskId}
+            className={`vf-toast ${toast.fading ? 'vf-toast--fading' : ''}`}
+            style={{ top: `${16 + index * 60}px` }}
+          >
+            {/* Spinner for working state */}
+            {toast.status === 'working' && (
+              <>
+                <div className="vf-toast-spinner" />
+                <span className="vf-toast-text">Working...</span>
+              </>
+            )}
+            {/* Checkmark for done state */}
+            {toast.status === 'done' && (
+              <>
+                <svg
+                  className="vf-toast-icon vf-toast-icon--success"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#22c55e"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span className="vf-toast-text vf-toast-text--success">Success!</span>
+              </>
+            )}
+            {/* X for error state */}
+            {toast.status === 'error' && (
+              <>
+                <svg
+                  className="vf-toast-icon vf-toast-icon--error"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <span className="vf-toast-text vf-toast-text--error">Failed</span>
+              </>
+            )}
+            {/* Dismiss button */}
+            <button
+              className="vf-toast-dismiss"
+              onClick={() => dismissToast(toast.taskId)}
+              title="Dismiss (task continues in background)"
             >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-          {/* X for error state - red */}
-          {pendingTask.status === 'error' && (
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#ef4444"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          )}
-        </div>
-      )}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
