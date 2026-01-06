@@ -225,12 +225,12 @@ export function App() {
               setToasts(p => p.map(t =>
                 t.taskId === taskId ? { ...t, fading: true } : t
               ));
-            }, 1500);
+            }, 2500);
 
             // Remove toast after fade
             setTimeout(() => {
               setToasts(p => p.filter(t => t.taskId !== taskId));
-            }, 3000);
+            }, 4000);
           } else if (taskStatus === 'failed') {
             newToasts[toastIndex] = { ...newToasts[toastIndex], status: 'error' };
 
@@ -502,26 +502,28 @@ export function App() {
             {/* Element name */}
             <span className="vf-toast-element">{toast.elementName}</span>
           </div>
-          {/* Dismiss button */}
-          <button
-            className="vf-toast-dismiss"
-            onClick={() => dismissToast(toast.taskId)}
-            title="Dismiss (task continues in background)"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {/* Dismiss button - only show for working/error states */}
+          {toast.status !== 'done' && (
+            <button
+              className="vf-toast-dismiss"
+              onClick={() => dismissToast(toast.taskId)}
+              title="Dismiss (task continues in background)"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
       ))}
     </div>
