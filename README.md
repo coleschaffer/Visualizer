@@ -115,7 +115,7 @@ visual-feedback-tool/
 
 | Key | Action |
 |-----|--------|
-| `Ctrl` | Toggle enable/disable |
+| `Ctrl` (macOS) / `Alt+Shift+V` (Windows) | Toggle enable/disable |
 | `Click` | Select element |
 | `Space` | Select hovered element |
 | `↑` / `↓` | Navigate parent/child |
@@ -123,7 +123,7 @@ visual-feedback-tool/
 | `@` | Enter reference mode |
 | `Esc` | Deselect / Close |
 | `Enter` | Submit feedback |
-| `Option+Enter` | New line |
+| `Alt+Enter` (Windows) / `Option+Enter` (macOS) | New line |
 
 ## Configuration
 

@@ -368,11 +368,18 @@ export function App() {
     }
   }, [isActive, selectedElement, isReferencing, setActive, clearSelection, hoverElement, setReferencedElement]);
 
-  // Global toggle shortcut - Ctrl key to toggle
+  // Global toggle shortcut - platform-specific
+  // macOS: Ctrl (Ctrl isn't used for common shortcuts on macOS)
+  // Windows/Linux: Alt+Shift+V (Ctrl conflicts with copy/paste/etc)
   useEffect(() => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Ctrl key alone to toggle enable/disable
-      if (e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey) {
+      const shouldToggle = isMac
+        ? e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey
+        : e.key.toLowerCase() === 'v' && e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey;
+
+      if (shouldToggle) {
         e.preventDefault();
         const newState = !isActive;
         setActive(newState);
