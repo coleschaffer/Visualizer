@@ -374,7 +374,10 @@ export function App() {
       // Ctrl key alone to toggle enable/disable
       if (e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        setActive(!isActive);
+        const newState = !isActive;
+        setActive(newState);
+        // Notify background script so popup stays in sync
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: newState }).catch(() => {});
       }
     };
 

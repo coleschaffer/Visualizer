@@ -113,6 +113,7 @@ function Popup() {
     chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
       if (response) {
         setConnectionStatus(response.connectionStatus || 'disconnected');
+        setIsActive(response.isActive || false);
       }
     });
   };
