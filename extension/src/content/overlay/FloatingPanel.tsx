@@ -274,11 +274,10 @@ export function FloatingPanel({
       });
 
       if (response.success && response.taskId) {
-        // Show "Sent!" briefly then close panel and show overlay
+        // Create toast immediately (before server responds with task_update)
+        // then close the panel
         setStatus('sent');
-        setTimeout(() => {
-          onTaskSubmitted(response.taskId!, element.rect);
-        }, 500);
+        onTaskSubmitted(response.taskId!, element.rect);
       } else {
         console.error('Failed to send feedback:', response.error);
         setStatus('error');
