@@ -90,8 +90,8 @@ async function handleMessage(
       break;
 
     case 'CONNECT':
-      console.log('[VF] CONNECT request received, port:', message.port);
-      await connect(message.port);
+      console.log('[VF] CONNECT request received, port:', message.port, 'token:', message.token ? 'yes' : 'no');
+      await connect(message.port, message.token);
       const success = connectionStatus === 'connected';
       console.log('[VF] CONNECT complete, status:', connectionStatus, 'success:', success);
       sendResponse({ success });
@@ -144,6 +144,20 @@ async function handleMessage(
       }
       break;
 
+    case 'GET_QUEUE_COUNT':
+      try {
+        const response = await fetch('http://localhost:3848/tasks');
+        if (response.ok) {
+          const data = await response.json();
+          sendResponse({ count: data.count || 0 });
+        } else {
+          sendResponse({ count: 0 });
+        }
+      } catch {
+        sendResponse({ count: 0 });
+      }
+      break;
+
     default:
       sendResponse({ success: false, error: 'Unknown message type' });
   }
@@ -164,7 +178,7 @@ function updateIcon(tabId: number, isActive: boolean) {
 }
 
 // Connect to server
-async function connect(port: number) {
+async function connect(port: number, token?: string) {
   if (socket?.readyState === WebSocket.OPEN) {
     disconnect();
   }
@@ -174,7 +188,8 @@ async function connect(port: number) {
   broadcastStatus();
 
   try {
-    socket = new WebSocket(`ws://localhost:${port}`);
+    const wsUrl = token ? `ws://localhost:${port}?token=${encodeURIComponent(token)}` : `ws://localhost:${port}`;
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       console.log('[VF] Connected to server');
@@ -196,11 +211,12 @@ async function connect(port: number) {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('[VF] Server message:', data.type, data.task?.id, data.task?.status);
+        console.log('[VF] Server message received:', event.data.substring(0, 200));
+        console.log('[VF] Parsed message:', data.type, data.task?.id, data.task?.status);
 
         // Forward task updates to all tabs
         if (data.type === 'task_update' && data.task) {
-          console.log('[VF] Broadcasting task update to tabs:', data.task.id, data.task.status);
+          console.log('[VF] Broadcasting task update to tabs:', data.task.id, 'status:', data.task.status);
           chrome.tabs.query({}, (tabs) => {
             console.log('[VF] Found', tabs.length, 'tabs');
             tabs.forEach((tab) => {
