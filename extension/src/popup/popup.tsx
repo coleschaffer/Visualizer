@@ -237,9 +237,8 @@ function Popup() {
                             type="text"
                             value={projectPath}
                             onChange={(e) => saveProjectPath(e.target.value)}
-                            placeholder="Select or paste path..."
+                            placeholder="Enter project path (e.g. C:\myproject or /home/user/myproject)"
                             className="project-input-with-btn"
-                            readOnly
                           />
                           <button
                             className="browse-btn"
@@ -248,9 +247,14 @@ function Popup() {
                                 // @ts-ignore
                                 const dirHandle = await window.showDirectoryPicker();
                                 const name = dirHandle.name;
+                                // Detect platform for default path suggestion
+                                const isWindows = navigator.userAgent.includes('Windows');
+                                const defaultPath = isWindows
+                                  ? `C:\\Users\\${name}`
+                                  : `/Users/${name}`;
                                 const path = prompt(
-                                  `Selected: ${name}\n\nEnter full path to this folder:`,
-                                  `/Users/coleschaffer/Desktop/${name}`
+                                  `Selected: ${name}\n\nThe File System API doesn't provide full paths.\nPlease enter or paste the full path to this folder:`,
+                                  defaultPath
                                 );
                                 if (path) {
                                   saveProjectPath(path);
