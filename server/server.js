@@ -308,12 +308,30 @@ const httpServer = createServer((req, res) => {
   }
 });
 
-httpServer.listen(HTTP_PORT, () => {
-  console.log(`HTTP server on port ${HTTP_PORT}`);
-});
-
 // WebSocket server
 const wss = new WebSocketServer({ port: WS_PORT });
+
+// Start both servers and print Ready when both are listening
+let httpReady = false;
+let wsReady = false;
+
+function checkReady() {
+  if (httpReady && wsReady) {
+    console.log('Ready!\n');
+  }
+}
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`HTTP server on port ${HTTP_PORT}`);
+  httpReady = true;
+  checkReady();
+});
+
+wss.on('listening', () => {
+  console.log(`WebSocket server on port ${WS_PORT}`);
+  wsReady = true;
+  checkReady();
+});
 
 wss.on('connection', (ws) => {
   console.log('Client connected');
@@ -473,6 +491,3 @@ wss.on('connection', (ws) => {
   ws.on('close', () => console.log('Client disconnected'));
   ws.send(JSON.stringify({ type: 'ready' }));
 });
-
-console.log(`WebSocket server on port ${WS_PORT}`);
-console.log('Ready!\n');
