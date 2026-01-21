@@ -55,8 +55,10 @@ async function handleMessage(
 
   switch (message.type) {
     case 'GET_STATE':
+      // Use tabId from message (popup query) or sender (content script query)
+      const queryTabId = message.tabId ?? tabId;
       sendResponse({
-        isActive: tabId ? activeTabIds.has(tabId) : false,
+        isActive: queryTabId ? activeTabIds.has(queryTabId) : false,
         connectionStatus,
         serverPort,
       });

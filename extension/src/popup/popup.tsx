@@ -119,8 +119,10 @@ function Popup() {
     setLoadingTasks(false);
   };
 
-  const getExtensionState = () => {
-    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+  const getExtensionState = async () => {
+    // Get the active tab ID so we can query its state
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.runtime.sendMessage({ type: 'GET_STATE', tabId: tab?.id }, (response) => {
       if (response) {
         setConnectionStatus(response.connectionStatus || 'disconnected');
         setIsActive(response.isActive || false);
