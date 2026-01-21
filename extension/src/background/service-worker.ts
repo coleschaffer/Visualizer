@@ -166,8 +166,7 @@ async function connect(port: number) {
 
   connectionStatus = 'connecting';
   serverPort = port;
-  // Persist for auto-reconnect
-  chrome.storage.local.set({ serverPort: port });
+  broadcastStatus();
 
   try {
     socket = new WebSocket(`ws://localhost:${port}`);
@@ -175,6 +174,8 @@ async function connect(port: number) {
     socket.onopen = () => {
       console.log('[VF] Connected to server');
       connectionStatus = 'connected';
+      // Only persist port after successful connection
+      chrome.storage.local.set({ serverPort: port });
       broadcastStatus();
 
       // Start keep-alive ping to prevent service worker from sleeping
@@ -244,6 +245,7 @@ async function connect(port: number) {
     console.error('[VF] Connection failed:', error);
     connectionStatus = 'disconnected';
     socket = null;
+    broadcastStatus();
   }
 }
 
@@ -320,15 +322,21 @@ async function submitFeedback(
   }
 }
 
-// Broadcast connection status to all tabs
+// Broadcast connection status to all tabs and popup
 function broadcastStatus() {
+  const message = {
+    type: 'CONNECTION_STATUS',
+    status: connectionStatus,
+  };
+
+  // Send to popup and other extension contexts
+  chrome.runtime.sendMessage(message).catch(() => {});
+
+  // Send to content scripts in tabs
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
       if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'CONNECTION_STATUS',
-          status: connectionStatus,
-        }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, message).catch(() => {});
       }
     });
   });

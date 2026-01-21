@@ -46,6 +46,15 @@ function Popup() {
     getExtensionState();
     loadProjectPath();
     loadSelectedModel();
+
+    // Listen for status updates from background script
+    const handleMessage = (message: { type: string; status?: string }) => {
+      if (message.type === 'CONNECTION_STATUS' && message.status) {
+        setConnectionStatus(message.status as 'disconnected' | 'connecting' | 'connected');
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
 
   const loadSelectedModel = async () => {
