@@ -138,8 +138,10 @@ function Popup() {
 
   const handleConnect = async () => {
     if (!serverPort) return;
+    console.log('[VF Popup] Connecting to port:', serverPort);
     setConnectionStatus('connecting');
     chrome.runtime.sendMessage({ type: 'CONNECT', port: serverPort }, (response) => {
+      console.log('[VF Popup] Connect response:', response);
       if (response?.success) {
         setConnectionStatus('connected');
       } else {

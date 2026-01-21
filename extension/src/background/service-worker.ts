@@ -88,8 +88,11 @@ async function handleMessage(
       break;
 
     case 'CONNECT':
+      console.log('[VF] CONNECT request received, port:', message.port);
       await connect(message.port);
-      sendResponse({ success: connectionStatus === 'connected' });
+      const success = connectionStatus === 'connected';
+      console.log('[VF] CONNECT complete, status:', connectionStatus, 'success:', success);
+      sendResponse({ success });
       break;
 
     case 'DISCONNECT':
