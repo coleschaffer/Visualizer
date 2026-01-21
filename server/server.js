@@ -9,7 +9,10 @@ const os = require('os');
 
 const WS_PORT = 3847;
 const HTTP_PORT = 3848;
-const CLAUDE_PATH = os.homedir() + '/.local/bin/claude';
+const isWindows = os.platform() === 'win32';
+const CLAUDE_PATH = isWindows
+  ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd')
+  : path.join(os.homedir(), '.local', 'bin', 'claude');
 const SCREENSHOT_DIR = path.join(os.tmpdir(), 'visual-feedback-screenshots');
 const TASKS_FILE = path.join(os.homedir(), '.visual-feedback-server', 'tasks.json');
 
@@ -383,16 +386,24 @@ wss.on('connection', (ws) => {
           '--dangerously-skip-permissions'
         ];
 
+        const spawnEnv = isWindows
+          ? {
+              ...process.env,
+              ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY
+            }
+          : {
+              HOME: os.homedir(),
+              PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:' + os.homedir() + '/.local/bin',
+              USER: process.env.USER,
+              TERM: 'xterm-256color',
+              ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY
+            };
+
         const child = spawn(CLAUDE_PATH, args, {
           cwd: projectPath,
-          env: {
-            HOME: os.homedir(),
-            PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:' + os.homedir() + '/.local/bin',
-            USER: process.env.USER,
-            TERM: 'xterm-256color',
-            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY
-          },
-          stdio: ['ignore', 'pipe', 'pipe']
+          env: spawnEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          shell: isWindows
         });
 
         child.stdout.on('data', (d) => {
