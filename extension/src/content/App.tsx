@@ -433,9 +433,15 @@ export function App() {
 
   // Listen for messages from background script
   useEffect(() => {
-    const handleMessage = (message: { type: string; active?: boolean; status?: string }) => {
+    const handleMessage = (
+      message: { type: string; active?: boolean; status?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: { success: boolean }) => void
+    ) => {
       if (message.type === 'SET_ACTIVE' && message.active !== undefined) {
         setActive(message.active);
+        sendResponse({ success: true });
+        return true; // Keep channel open for async response
       } else if (message.type === 'CONNECTION_STATUS') {
         // Could update UI to show connection status
         console.log('[VF] Connection status:', message.status);

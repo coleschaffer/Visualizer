@@ -39,6 +39,7 @@ function Popup() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   // Check server status and get extension state
   useEffect(() => {
@@ -128,11 +129,20 @@ function Popup() {
   };
 
   const handleToggle = async () => {
+    setToggleError(null);
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'SET_ACTIVE', active: !isActive }).catch(() => {});
-      chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: !isActive });
-      setIsActive(!isActive);
+      const newState = !isActive;
+      try {
+        // Try to send message to content script and wait for response
+        await chrome.tabs.sendMessage(tab.id, { type: 'SET_ACTIVE', active: newState });
+        // Content script responded - update state
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: newState });
+        setIsActive(newState);
+      } catch (err) {
+        // Content script not responding - show error
+        setToggleError('Refresh the page to enable');
+      }
     }
   };
 
@@ -304,6 +314,9 @@ function Popup() {
                           <span className="toggle-knob" />
                         </button>
                       </div>
+                      {toggleError && (
+                        <div className="toggle-error">{toggleError}</div>
+                      )}
 
                       <button className="disconnect-btn" onClick={handleDisconnect}>
                         Disconnect
