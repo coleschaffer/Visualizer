@@ -55,8 +55,10 @@ async function handleMessage(
 
   switch (message.type) {
     case 'GET_STATE':
+      // Use tabId from message (popup query) or sender (content script query)
+      const queryTabId = message.tabId ?? tabId;
       sendResponse({
-        isActive: tabId ? activeTabIds.has(tabId) : false,
+        isActive: queryTabId ? activeTabIds.has(queryTabId) : false,
         connectionStatus,
         serverPort,
       });
@@ -88,8 +90,11 @@ async function handleMessage(
       break;
 
     case 'CONNECT':
-      await connect(message.port);
-      sendResponse({ success: connectionStatus === 'connected' });
+      console.log('[VF] CONNECT request received, port:', message.port, 'token:', message.token ? 'yes' : 'no');
+      await connect(message.port, message.token);
+      const success = connectionStatus === 'connected';
+      console.log('[VF] CONNECT complete, status:', connectionStatus, 'success:', success);
+      sendResponse({ success });
       break;
 
     case 'DISCONNECT':
@@ -139,6 +144,20 @@ async function handleMessage(
       }
       break;
 
+    case 'GET_QUEUE_COUNT':
+      try {
+        const response = await fetch('http://localhost:3848/tasks');
+        if (response.ok) {
+          const data = await response.json();
+          sendResponse({ count: data.count || 0 });
+        } else {
+          sendResponse({ count: 0 });
+        }
+      } catch {
+        sendResponse({ count: 0 });
+      }
+      break;
+
     default:
       sendResponse({ success: false, error: 'Unknown message type' });
   }
@@ -159,22 +178,24 @@ function updateIcon(tabId: number, isActive: boolean) {
 }
 
 // Connect to server
-async function connect(port: number) {
+async function connect(port: number, token?: string) {
   if (socket?.readyState === WebSocket.OPEN) {
     disconnect();
   }
 
   connectionStatus = 'connecting';
   serverPort = port;
-  // Persist for auto-reconnect
-  chrome.storage.local.set({ serverPort: port });
+  broadcastStatus();
 
   try {
-    socket = new WebSocket(`ws://localhost:${port}`);
+    const wsUrl = token ? `ws://localhost:${port}?token=${encodeURIComponent(token)}` : `ws://localhost:${port}`;
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       console.log('[VF] Connected to server');
       connectionStatus = 'connected';
+      // Only persist port after successful connection
+      chrome.storage.local.set({ serverPort: port });
       broadcastStatus();
 
       // Start keep-alive ping to prevent service worker from sleeping
@@ -190,11 +211,12 @@ async function connect(port: number) {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('[VF] Server message:', data.type, data.task?.id, data.task?.status);
+        console.log('[VF] Server message received:', event.data.substring(0, 200));
+        console.log('[VF] Parsed message:', data.type, data.task?.id, data.task?.status);
 
         // Forward task updates to all tabs
         if (data.type === 'task_update' && data.task) {
-          console.log('[VF] Broadcasting task update to tabs:', data.task.id, data.task.status);
+          console.log('[VF] Broadcasting task update to tabs:', data.task.id, 'status:', data.task.status);
           chrome.tabs.query({}, (tabs) => {
             console.log('[VF] Found', tabs.length, 'tabs');
             tabs.forEach((tab) => {
@@ -244,6 +266,7 @@ async function connect(port: number) {
     console.error('[VF] Connection failed:', error);
     connectionStatus = 'disconnected';
     socket = null;
+    broadcastStatus();
   }
 }
 
@@ -320,15 +343,21 @@ async function submitFeedback(
   }
 }
 
-// Broadcast connection status to all tabs
+// Broadcast connection status to all tabs and popup
 function broadcastStatus() {
+  const message = {
+    type: 'CONNECTION_STATUS',
+    status: connectionStatus,
+  };
+
+  // Send to popup and other extension contexts
+  chrome.runtime.sendMessage(message).catch(() => {});
+
+  // Send to content scripts in tabs
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
       if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'CONNECTION_STATUS',
-          status: connectionStatus,
-        }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, message).catch(() => {});
       }
     });
   });

@@ -34,3 +34,9 @@ server/tasks.json
 
 # Claude Code exports
 *.txt
+
+# Claude Code local settings
+.claude/
+
+# Windows artifacts
+nul

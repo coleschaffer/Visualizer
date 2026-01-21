@@ -482,6 +482,16 @@ function getOverlayStyles(): string {
       background: rgba(0, 0, 0, 0.05);
       color: #6b7280;
     }
+
+    .vf-toast--queued {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border: 1px solid #93c5fd;
+      white-space: nowrap;
+    }
+
+    .vf-toast-icon--queued {
+      color: #3b82f6;
+    }
   `;
 }
 

@@ -52,6 +52,12 @@ body {
   justify-content: space-between;
 }
 
+.toggle-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: -8px;
+}
+
 .toggle-btn {
   width: 44px;
   height: 24px;
@@ -447,6 +453,23 @@ body {
   color: #374151;
 }
 
+.retry-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: #2563eb;
+}
+
 .server-list {
   display: flex;
   flex-direction: column;
@@ -530,6 +553,7 @@ body {
 }
 
 .disconnect-btn {
+  margin-top: 16px;
   width: 100%;
   padding: 8px 16px;
   background: #f3f4f6;
@@ -647,6 +671,37 @@ body {
   font-size: 12px;
   color: #6b7280;
   margin-bottom: 8px;
+}
+
+/* Token Section */
+.token-section {
+  margin: 8px 0;
+}
+
+.token-section label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.token-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.token-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.connect-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 /* Model Selector */

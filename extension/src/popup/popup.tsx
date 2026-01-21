@@ -34,11 +34,22 @@ function Popup() {
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [serverStatus, setServerStatus] = useState<'checking' | 'running' | 'stopped'>('checking');
   const [serverPort, setServerPort] = useState<number | null>(null);
+  const [requiresToken, setRequiresToken] = useState(false);
+  const [token, setToken] = useState('');
   const [projectPath, setProjectPath] = useState('');
   const [selectedModel, setSelectedModel] = useState<ModelOption>('claude-opus-4-5-20251101');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // Load token from storage
+  const loadToken = async () => {
+    const storage = await chrome.storage.local.get(['connectionToken']);
+    if (storage.connectionToken) {
+      setToken(storage.connectionToken);
+    }
+  };
 
   // Check server status and get extension state
   useEffect(() => {
@@ -46,6 +57,16 @@ function Popup() {
     getExtensionState();
     loadProjectPath();
     loadSelectedModel();
+    loadToken();
+
+    // Listen for status updates from background script
+    const handleMessage = (message: { type: string; status?: string }) => {
+      if (message.type === 'CONNECTION_STATUS' && message.status) {
+        setConnectionStatus(message.status as 'disconnected' | 'connecting' | 'connected');
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
 
   const loadSelectedModel = async () => {
@@ -87,6 +108,7 @@ function Popup() {
         const data = await response.json();
         setServerStatus('running');
         setServerPort(data.wsPort);
+        setRequiresToken(data.requiresToken || false);
       } else {
         setServerStatus('stopped');
       }
@@ -109,31 +131,58 @@ function Popup() {
     setLoadingTasks(false);
   };
 
-  const getExtensionState = () => {
-    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+  const getExtensionState = async () => {
+    // Get the active tab ID so we can query its state
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.runtime.sendMessage({ type: 'GET_STATE', tabId: tab?.id }, (response) => {
       if (response) {
         setConnectionStatus(response.connectionStatus || 'disconnected');
+        setIsActive(response.isActive || false);
       }
     });
   };
 
   const handleToggle = async () => {
+    setToggleError(null);
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'SET_ACTIVE', active: !isActive }).catch(() => {});
-      chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: !isActive });
-      setIsActive(!isActive);
+      const newState = !isActive;
+      try {
+        // Try to send message to content script and wait for response
+        await chrome.tabs.sendMessage(tab.id, { type: 'SET_ACTIVE', active: newState });
+        // Content script responded - update state
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: newState });
+        setIsActive(newState);
+      } catch (err) {
+        // Content script not responding - show error
+        setToggleError('Refresh the page to enable');
+      }
     }
   };
 
   const handleConnect = async () => {
     if (!serverPort) return;
+    if (requiresToken && !token.trim()) {
+      return; // Don't connect without token if required
+    }
+    const tokenToUse = requiresToken ? token.trim() : undefined;
+    console.log('[VF Popup] Connecting to port:', serverPort, 'with token:', requiresToken ? 'yes' : 'no');
     setConnectionStatus('connecting');
-    chrome.runtime.sendMessage({ type: 'CONNECT', port: serverPort }, (response) => {
+    chrome.runtime.sendMessage({ type: 'CONNECT', port: serverPort, token: tokenToUse }, (response) => {
+      console.log('[VF Popup] Connect response:', response);
       if (response?.success) {
         setConnectionStatus('connected');
+        // Save token on successful connection
+        if (tokenToUse) {
+          chrome.storage.local.set({ connectionToken: tokenToUse });
+        }
       } else {
         setConnectionStatus('disconnected');
+        // Clear saved token if connection failed (likely invalid token)
+        if (tokenToUse) {
+          chrome.storage.local.remove('connectionToken');
+          setToken('');
+        }
       }
     });
   };
@@ -215,7 +264,7 @@ function Popup() {
                 <div className="no-servers">
                   <p>Server not running</p>
                   <p className="hint">Run: launchctl start com.visualfeedback.server</p>
-                  <button className="refresh-btn" onClick={checkServerStatus}>
+                  <button className="retry-btn" onClick={checkServerStatus}>
                     Retry
                   </button>
                 </div>
@@ -236,9 +285,8 @@ function Popup() {
                             type="text"
                             value={projectPath}
                             onChange={(e) => saveProjectPath(e.target.value)}
-                            placeholder="Select or paste path..."
+                            placeholder="Enter project path (e.g. C:\myproject or /home/user/myproject)"
                             className="project-input-with-btn"
-                            readOnly
                           />
                           <button
                             className="browse-btn"
@@ -247,9 +295,14 @@ function Popup() {
                                 // @ts-ignore
                                 const dirHandle = await window.showDirectoryPicker();
                                 const name = dirHandle.name;
+                                // Detect platform for default path suggestion
+                                const isWindows = navigator.userAgent.includes('Windows');
+                                const defaultPath = isWindows
+                                  ? `C:\\Users\\${name}`
+                                  : `/Users/${name}`;
                                 const path = prompt(
-                                  `Selected: ${name}\n\nEnter full path to this folder:`,
-                                  `/Users/coleschaffer/Desktop/${name}`
+                                  `Selected: ${name}\n\nThe File System API doesn't provide full paths.\nPlease enter or paste the full path to this folder:`,
+                                  defaultPath
                                 );
                                 if (path) {
                                   saveProjectPath(path);
@@ -288,6 +341,9 @@ function Popup() {
                           <span className="toggle-knob" />
                         </button>
                       </div>
+                      {toggleError && (
+                        <div className="toggle-error">{toggleError}</div>
+                      )}
 
                       <button className="disconnect-btn" onClick={handleDisconnect}>
                         Disconnect
@@ -298,10 +354,22 @@ function Popup() {
                       <div className="server-info">
                         <span>Server running on port {serverPort}</span>
                       </div>
+                      {requiresToken && (
+                        <div className="token-section">
+                          <label>Connection Token:</label>
+                          <input
+                            type="text"
+                            value={token}
+                            onChange={(e) => setToken(e.target.value)}
+                            placeholder="Enter token from server console"
+                            className="token-input"
+                          />
+                        </div>
+                      )}
                       <button
                         className="connect-btn"
                         onClick={handleConnect}
-                        disabled={connectionStatus === 'connecting'}
+                        disabled={connectionStatus === 'connecting' || (requiresToken && !token.trim())}
                       >
                         {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect'}
                       </button>

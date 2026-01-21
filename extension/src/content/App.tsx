@@ -28,6 +28,28 @@ export function App() {
     dismissed: boolean;
   }[]>([]);
 
+  // Queued tasks counter (for MCP/async mode)
+  const [queuedCount, setQueuedCount] = useState(0);
+
+  // Fetch queued task count on load and periodically (via background script to avoid CORS)
+  useEffect(() => {
+    const fetchQueueCount = () => {
+      chrome.runtime.sendMessage({ type: 'GET_QUEUE_COUNT' }, (response) => {
+        if (response?.count !== undefined) {
+          setQueuedCount(response.count);
+        }
+      });
+    };
+
+    // Fetch immediately on load
+    fetchQueueCount();
+
+    // Poll every 5 seconds to keep queue count in sync
+    const interval = setInterval(fetchQueueCount, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const selectedDomElement = useRef<HTMLElement | null>(null);
   const hoveredDomElement = useRef<Element | null>(null);
   const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -197,6 +219,7 @@ export function App() {
         const taskStatus = message.task.status;
 
         setToasts(prev => {
+          console.log('[VF] Looking for taskId:', taskId, 'in toasts:', prev.map(t => t.taskId));
           const toastIndex = prev.findIndex(t => t.taskId === taskId);
           if (toastIndex === -1) return prev;
 
@@ -238,6 +261,12 @@ export function App() {
             setTimeout(() => {
               setToasts(p => p.filter(t => t.taskId !== taskId));
             }, 3000);
+          } else if (taskStatus === 'queued') {
+            // Task was queued (MCP/async mode) - remove working toast and increment counter
+            setQueuedCount(c => c + 1);
+
+            // Remove the working toast immediately
+            return prev.filter(t => t.taskId !== taskId);
           }
 
           return newToasts;
@@ -258,6 +287,8 @@ export function App() {
         clearSelection();
       } else if (isActive) {
         setActive(false);
+        // Notify background script so popup stays in sync
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: false }).catch(() => {});
       }
     }
 
@@ -368,13 +399,23 @@ export function App() {
     }
   }, [isActive, selectedElement, isReferencing, setActive, clearSelection, hoverElement, setReferencedElement]);
 
-  // Global toggle shortcut - Ctrl key to toggle
+  // Global toggle shortcut - platform-specific
+  // macOS: Ctrl (Ctrl isn't used for common shortcuts on macOS)
+  // Windows/Linux: Alt+Shift+V (Ctrl conflicts with copy/paste/etc)
   useEffect(() => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Ctrl key alone to toggle enable/disable
-      if (e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey) {
+      const shouldToggle = isMac
+        ? e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey
+        : e.key === 'Alt' && e.ctrlKey && !e.shiftKey && !e.metaKey;
+
+      if (shouldToggle) {
         e.preventDefault();
-        setActive(!isActive);
+        const newState = !isActive;
+        setActive(newState);
+        // Notify background script so popup stays in sync
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: newState }).catch(() => {});
       }
     };
 
@@ -430,9 +471,15 @@ export function App() {
 
   // Listen for messages from background script
   useEffect(() => {
-    const handleMessage = (message: { type: string; active?: boolean; status?: string }) => {
+    const handleMessage = (
+      message: { type: string; active?: boolean; status?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: { success: boolean }) => void
+    ) => {
       if (message.type === 'SET_ACTIVE' && message.active !== undefined) {
         setActive(message.active);
+        sendResponse({ success: true });
+        return true; // Keep channel open for async response
       } else if (message.type === 'CONNECTION_STATUS') {
         // Could update UI to show connection status
         console.log('[VF] Connection status:', message.status);
@@ -443,14 +490,49 @@ export function App() {
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [setActive]);
 
+  // Calculate toast offset (queued toast takes first slot if visible)
+  const hasQueuedToast = queuedCount > 0;
+  const toastOffset = hasQueuedToast ? 1 : 0;
+
   // Toast notifications render (always visible, even when tool is inactive)
   const toastContainer = (
     <div className="vf-toast-container">
+      {/* Queued tasks counter toast */}
+      {queuedCount > 0 && (
+        <div className="vf-toast vf-toast--queued" style={{ top: '16px' }}>
+          <div className="vf-toast-content">
+            <svg
+              className="vf-toast-icon vf-toast-icon--queued"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="9" x2="15" y2="9" />
+              <line x1="9" y1="13" x2="15" y2="13" />
+              <line x1="9" y1="17" x2="12" y2="17" />
+            </svg>
+            <span className="vf-toast-text">{queuedCount} queued task{queuedCount !== 1 ? 's' : ''}</span>
+          </div>
+          <button
+            className="vf-toast-dismiss"
+            onClick={() => setQueuedCount(0)}
+            title="Clear queue count"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {toasts.filter(t => !t.dismissed).map((toast, index) => (
         <div
           key={toast.taskId}
           className={`vf-toast ${toast.fading ? 'vf-toast--fading' : ''}`}
-          style={{ top: `${16 + index * 56}px` }}
+          style={{ top: `${16 + (index + toastOffset) * 56}px` }}
         >
           <div className="vf-toast-content">
             {/* Spinner for working state */}
