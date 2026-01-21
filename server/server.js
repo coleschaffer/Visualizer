@@ -15,10 +15,18 @@ const CLAUDE_PATH = isWindows
   : path.join(os.homedir(), '.local', 'bin', 'claude');
 const SCREENSHOT_DIR = path.join(os.tmpdir(), 'visual-feedback-screenshots');
 const TASKS_FILE = path.join(os.homedir(), '.visual-feedback-server', 'tasks.json');
+const PROMPT_TEMPLATE_PATH = path.join(__dirname, 'prompt-template.md');
 
 // Ensure screenshot directory exists
 if (!fs.existsSync(SCREENSHOT_DIR)) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+}
+
+// Ensure tasks directory exists
+const TASKS_DIR = path.dirname(TASKS_FILE);
+if (!fs.existsSync(TASKS_DIR)) {
+  console.log(`Creating tasks directory: ${TASKS_DIR}`);
+  fs.mkdirSync(TASKS_DIR, { recursive: true });
 }
 
 // Beads-style element memory system
@@ -130,6 +138,20 @@ function formatBeadContext(bead) {
 
 console.log('Starting Visual Feedback Server...');
 
+// Load and validate prompt template at startup
+let promptTemplateSource = 'built-in fallback';
+if (fs.existsSync(PROMPT_TEMPLATE_PATH)) {
+  promptTemplateSource = PROMPT_TEMPLATE_PATH;
+  const template = fs.readFileSync(PROMPT_TEMPLATE_PATH, 'utf8');
+  const lineCount = template.split('\n').length;
+  console.log(`Prompt template: ${PROMPT_TEMPLATE_PATH} (${lineCount} lines)`);
+  console.log('--- Template ---');
+  console.log(template);
+  console.log('--- End Template ---\n');
+} else {
+  console.log('Prompt template: using built-in fallback (no prompt-template.txt found)');
+}
+
 // Task storage with file persistence
 const tasks = new Map();
 const MAX_TASKS = 50;
@@ -189,72 +211,96 @@ function broadcastTaskUpdate(task) {
   console.log(`[Broadcast] Complete: ${sentCount}/${clientCount} clients received message`);
 }
 
-// Build rich prompt with all context
-function buildPrompt(feedback, element, pageUrl, beadContext) {
-  const lines = [
-    `# Visual Feedback Request`,
-    ``,
-    `## User Feedback`,
-    `"${feedback}"`,
-    ``,
-    `## Target Element`,
-    `- **Tag:** <${element.tag}>`,
-    `- **Selector:** ${element.selector || 'N/A'}`,
-  ];
+// Load prompt template from file
+function loadPromptTemplate() {
+  try {
+    if (fs.existsSync(PROMPT_TEMPLATE_PATH)) {
+      return fs.readFileSync(PROMPT_TEMPLATE_PATH, 'utf8');
+    }
+  } catch (err) {
+    console.error('Failed to load prompt template:', err.message);
+  }
+  // Fallback template if file doesn't exist
+  return `# Visual Feedback Request
 
+## User Feedback
+"{{FEEDBACK}}"
+
+## Target Element
+- **Tag:** <{{ELEMENT_TAG}}>
+- **Selector:** {{SELECTOR}}
+{{ELEMENT_ID}}
+{{ELEMENT_CLASSES}}
+{{DOM_PATH}}
+
+{{COMPUTED_STYLES}}
+
+{{PAGE_URL}}
+
+{{BEAD_CONTEXT}}
+
+## Instructions
+1. Find the source file containing this element
+2. Make the requested change`;
+}
+
+// Build rich prompt with all context using template
+function buildPrompt(feedback, element, pageUrl, beadContext, taskId) {
+  let template = loadPromptTemplate();
+
+  // Build optional sections
+  let elementId = '';
   if (element.id) {
-    lines.push(`- **ID:** #${element.id}`);
+    elementId = `- **ID:** #${element.id}`;
   }
 
+  let elementClasses = '';
   if (element.classes && element.classes.length > 0) {
-    lines.push(`- **Classes:** .${element.classes.join(', .')}`);
+    elementClasses = `- **Classes:** .${element.classes.join(', .')}`;
   }
 
-  // Add element path (breadcrumb)
+  let domPath = '';
   if (element.path && element.path.length > 0) {
     const pathStr = element.path.map(p => p.selector || p.tag).join(' > ');
-    lines.push(`- **DOM Path:** ${pathStr}`);
+    domPath = `- **DOM Path:** ${pathStr}`;
   }
 
-  // Add computed styles if available
+  let computedStyles = '';
   if (element.computedStyles) {
     const styles = element.computedStyles;
-    lines.push(``, `## Current Styles`);
-    if (styles.width) lines.push(`- Width: ${styles.width}`);
-    if (styles.height) lines.push(`- Height: ${styles.height}`);
-    if (styles.backgroundColor) lines.push(`- Background: ${styles.backgroundColor}`);
-    if (styles.color) lines.push(`- Text Color: ${styles.color}`);
-    if (styles.fontSize) lines.push(`- Font Size: ${styles.fontSize}`);
-    if (styles.display) lines.push(`- Display: ${styles.display}`);
-    if (styles.position) lines.push(`- Position: ${styles.position}`);
+    const styleLines = ['## Current Styles'];
+    if (styles.width) styleLines.push(`- Width: ${styles.width}`);
+    if (styles.height) styleLines.push(`- Height: ${styles.height}`);
+    if (styles.backgroundColor) styleLines.push(`- Background: ${styles.backgroundColor}`);
+    if (styles.color) styleLines.push(`- Text Color: ${styles.color}`);
+    if (styles.fontSize) styleLines.push(`- Font Size: ${styles.fontSize}`);
+    if (styles.display) styleLines.push(`- Display: ${styles.display}`);
+    if (styles.position) styleLines.push(`- Position: ${styles.position}`);
+    computedStyles = styleLines.join('\n');
   }
 
+  let pageUrlSection = '';
   if (pageUrl) {
-    lines.push(``, `## Page URL`, pageUrl);
+    pageUrlSection = `## Page URL\n${pageUrl}`;
   }
 
-  // Add bead context if available (previous changes to this element)
-  if (beadContext) {
-    lines.push(``, beadContext);
-  }
+  // Replace placeholders
+  template = template
+    .replace(/\{\{TASK_ID\}\}/g, taskId || 'unknown')
+    .replace(/\{\{FEEDBACK\}\}/g, feedback)
+    .replace(/\{\{ELEMENT_TAG\}\}/g, element.tag)
+    .replace(/\{\{SELECTOR\}\}/g, element.selector || 'N/A')
+    .replace(/\{\{ELEMENT_ID\}\}/g, elementId)
+    .replace(/\{\{ELEMENT_CLASSES\}\}/g, elementClasses)
+    .replace(/\{\{DOM_PATH\}\}/g, domPath)
+    .replace(/\{\{COMPUTED_STYLES\}\}/g, computedStyles)
+    .replace(/\{\{PAGE_URL\}\}/g, pageUrlSection)
+    .replace(/\{\{BEAD_CONTEXT\}\}/g, beadContext || '');
 
-  lines.push(
-    ``,
-    `## Instructions`,
-    `1. Use Language Server Protocol (LSP) features to efficiently navigate the codebase:`,
-    `   - Use "Go to Definition" to find where components/elements are defined`,
-    `   - Use "Find References" to locate all usages`,
-    `   - Use symbol search to quickly find relevant files`,
-    `2. Find the source file containing this element using the selector, classes, and DOM path as hints`,
-    `3. Make the requested change`,
-    `4. Commit the change with a descriptive message`,
-    `5. Push to GitHub`,
-    `6. **IMPORTANT**: After pushing, output the commit hash in this exact format:`,
-    `   COMMIT_HASH: <full-40-character-hash>`,
-    `   This is required for tracking purposes.`
-  );
+  // Clean up empty lines from unused placeholders
+  template = template.replace(/\n{3,}/g, '\n\n');
 
-  return lines.join('\n');
+  return template.trim();
 }
 
 // Save screenshot and return path
@@ -287,7 +333,7 @@ const httpServer = createServer((req, res) => {
 
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'running', wsPort: WS_PORT }));
+    res.end(JSON.stringify({ status: 'running', wsPort: WS_PORT, requiresToken: false }));
   } else if (req.url === '/tasks') {
     const taskList = Array.from(tasks.values()).reverse();
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -379,7 +425,9 @@ wss.on('connection', (ws) => {
           commitUrl: null
         };
         addTask(task);
-        broadcastTaskUpdate(task);
+
+        // Send 'queued' status immediately to dismiss working toast
+        broadcastTaskUpdate({ ...task, status: 'queued' });
 
         // Load bead context for this element (previous changes)
         const bead = loadElementBead(projectPath, element);
@@ -389,7 +437,7 @@ wss.on('connection', (ws) => {
         }
 
         // Build rich prompt
-        const prompt = buildPrompt(feedback, element, pageUrl, beadContext);
+        const prompt = buildPrompt(feedback, element, pageUrl, beadContext, taskId);
 
         console.log('\n--- Prompt ---');
         console.log(prompt);
