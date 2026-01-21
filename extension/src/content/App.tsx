@@ -258,6 +258,8 @@ export function App() {
         clearSelection();
       } else if (isActive) {
         setActive(false);
+        // Notify background script so popup stays in sync
+        chrome.runtime.sendMessage({ type: 'SET_ACTIVE', active: false }).catch(() => {});
       }
     }
 
